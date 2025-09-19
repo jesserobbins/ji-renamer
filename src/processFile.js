@@ -12,7 +12,7 @@ const isProcessableFile = require('./isProcessableFile')
 
 module.exports = async options => {
   try {
-    const { frames, filePath, inputPath } = options
+    const { frames, filePath, inputPath, convertBinary } = options
 
     const fileName = path.basename(filePath)
     const ext = path.extname(filePath).toLowerCase()
@@ -41,7 +41,7 @@ module.exports = async options => {
       images = _extractedFrames.images
       videoPrompt = _extractedFrames.videoPrompt
     } else {
-      content = await readFileContent({ filePath })
+      content = await readFileContent({ filePath, convertBinary })
       if (!content) {
         console.log(`🔴 No text content: ${relativeFilePath}`)
         return
