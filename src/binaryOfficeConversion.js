@@ -1,6 +1,10 @@
 const path = require('path')
 const os = require('os')
 const { promises: fs } = require('fs')
+const { execFile } = require('child_process')
+const { promisify } = require('util')
+
+const execFileAsync = promisify(execFile)
 
 const EOCD_SIGNATURE = 0x06054b50
 const CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50
@@ -17,6 +21,8 @@ const BINARY_OFFICE_KINDS = {
   '.xls': 'spreadsheet',
   '.xlt': 'spreadsheet'
 }
+
+const ALLOWED_LIBRARY_EXTENSIONS = new Set(['.docx', '.dotx'])
 
 const logVerbose = (verbose, message) => {
   if (!verbose) return
@@ -210,33 +216,302 @@ const buildDocxBuffer = (lines) => {
   return createStoredZip(files)
 }
 
+const isInsideDirectory = (directory, target) => {
+  if (!directory) return false
+  const relative = path.relative(directory, target)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+let doc2docxLoader
+
+const loadDoc2Docx = async () => {
+  if (doc2docxLoader === undefined) {
+    doc2docxLoader = import('doc2docx')
+      .then((mod) => mod?.default ?? mod)
+      .catch(() => null)
+  }
+  return doc2docxLoader
+}
+
+const fileExists = async (filePath) => {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch (err) {
+    if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return false
+    throw err
+  }
+}
+
+const findConvertedFile = async ({ dir, baseName, extensions }) => {
+  try {
+    const entries = await fs.readdir(dir)
+    const normalizedBase = baseName.toLowerCase()
+    const candidates = entries
+      .filter((entry) => extensions.has(path.extname(entry).toLowerCase()))
+      .map((entry) => ({
+        entry,
+        exact: path.basename(entry, path.extname(entry)).toLowerCase() === normalizedBase
+      }))
+
+    if (candidates.length === 0) return null
+    const match = candidates.find((candidate) => candidate.exact) || candidates[0]
+    return path.join(dir, match.entry)
+  } catch (err) {
+    if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return null
+    throw err
+  }
+}
+
+const ensureOutputPath = async ({
+  searchDirs,
+  outputPath,
+  baseName,
+  verbose,
+  workspaceDir,
+  originalDocxInfo
+}) => {
+  for (const dir of searchDirs) {
+    const candidate = await findConvertedFile({ dir, baseName, extensions: ALLOWED_LIBRARY_EXTENSIONS })
+    if (!candidate) continue
+
+    if (candidate !== outputPath) {
+      await fs.copyFile(candidate, outputPath)
+      const shouldRemove = isInsideDirectory(workspaceDir, candidate) || (
+        originalDocxInfo &&
+        candidate === originalDocxInfo.path &&
+        !originalDocxInfo.existed
+      )
+
+      if (shouldRemove) {
+        await fs.rm(candidate, { force: true })
+        logVerbose(verbose, `🧽 Removed intermediate converted file at ${candidate}`)
+      }
+    }
+
+    return true
+  }
+
+  return false
+}
+
+const runDoc2DocxFunction = async ({
+  fn,
+  inputPath,
+  outputPath,
+  baseName,
+  searchDirs,
+  workspaceDir,
+  originalDocxInfo,
+  verbose
+}) => {
+  const signatures = [
+    () => fn(inputPath, outputPath),
+    () => fn({ input: inputPath, output: outputPath }),
+    () => fn({ source: inputPath, destination: outputPath }),
+    () => fn(inputPath)
+  ]
+
+  for (const invoke of signatures) {
+    try {
+      const result = invoke()
+      if (result && typeof result.then === 'function') await result
+      const resolved = await ensureOutputPath({
+        searchDirs,
+        outputPath,
+        baseName,
+        verbose,
+        workspaceDir,
+        originalDocxInfo
+      })
+      if (resolved) return true
+    } catch (err) {
+      logVerbose(verbose, `⚠️ doc2docx invocation failed: ${err.message}`)
+    }
+  }
+
+  return false
+}
+
+const convertUsingModule = async ({
+  module,
+  inputPath,
+  outputPath,
+  baseName,
+  workspaceDir,
+  originalDocxInfo,
+  verbose
+}) => {
+  if (!module) return false
+
+  const searchDirs = [path.dirname(outputPath), path.dirname(inputPath)]
+  const candidates = []
+  if (typeof module === 'function') candidates.push(module)
+  if (module && typeof module.convert === 'function') candidates.push(module.convert.bind(module))
+  if (module && typeof module.default === 'function') candidates.push(module.default.bind(module))
+  if (module && typeof module.doc2docx === 'function') candidates.push(module.doc2docx.bind(module))
+
+  for (const fn of candidates) {
+    const success = await runDoc2DocxFunction({
+      fn,
+      inputPath,
+      outputPath,
+      baseName,
+      searchDirs,
+      workspaceDir,
+      originalDocxInfo,
+      verbose
+    })
+    if (success) return true
+  }
+
+  return false
+}
+
+const convertUsingCli = async ({
+  filePath,
+  tempDir,
+  outputPath,
+  baseName,
+  originalDocxInfo,
+  verbose
+}) => {
+  const inputCopyPath = path.join(tempDir, path.basename(filePath))
+  try {
+    await fs.copyFile(filePath, inputCopyPath)
+  } catch (err) {
+    logVerbose(verbose, `⚠️ Unable to prepare temporary input for doc2docx CLI: ${err.message}`)
+    return false
+  }
+
+  const inputName = path.basename(inputCopyPath)
+  const outputName = path.basename(outputPath)
+  const attempts = [
+    [inputCopyPath, outputPath],
+    [inputCopyPath],
+    [inputName],
+    [inputName, outputName],
+    ['--output', outputPath, inputCopyPath],
+    ['--output', outputName, inputName],
+    [inputCopyPath, '--output', outputPath],
+    [inputName, '--output', outputName],
+    ['--input', inputCopyPath, '--output', outputPath]
+  ]
+
+  const attempted = new Set()
+  let conversionSucceeded = false
+
+  for (const args of attempts) {
+    const key = args.join('|')
+    if (attempted.has(key)) continue
+    attempted.add(key)
+
+    try {
+      await execFileAsync('doc2docx', args, { cwd: tempDir })
+      const resolved = await ensureOutputPath({
+        searchDirs: [tempDir],
+        outputPath,
+        baseName,
+        verbose,
+        workspaceDir: tempDir,
+        originalDocxInfo
+      })
+      if (resolved) {
+        conversionSucceeded = true
+        break
+      }
+    } catch (err) {
+      logVerbose(verbose, `⚠️ doc2docx CLI attempt failed (${args.join(' ')}): ${err.message}`)
+    }
+  }
+
+  try {
+    await fs.rm(inputCopyPath, { force: true })
+  } catch (err) {
+    logVerbose(verbose, `⚠️ Failed to remove temporary copy ${inputCopyPath}: ${err.message}`)
+  }
+
+  return conversionSucceeded
+}
+
 const convertBinaryOfficeToDocx = async ({ filePath, ext, verbose = false }) => {
   const kind = BINARY_OFFICE_KINDS[ext]
   if (!kind) {
     throw new Error(`Unsupported binary Office extension: ${ext}`)
   }
 
+  const baseName = path.basename(filePath, ext) || 'converted'
+  const originalDocxPath = path.join(path.dirname(filePath), `${baseName}.docx`)
+  const originalDocxExists = await fileExists(originalDocxPath)
+  const originalDocxInfo = { path: originalDocxPath, existed: originalDocxExists }
+
   logVerbose(verbose, `⚙️ Starting legacy ${kind} conversion for ${path.basename(filePath)}`)
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-renamer-legacy-'))
+  let cleaned = false
+  const cleanup = async () => {
+    if (cleaned) return
+    cleaned = true
+    await fs.rm(tempDir, { recursive: true, force: true })
+    logVerbose(verbose, `🧹 Removed temporary directory ${tempDir}`)
+  }
+
+  const tempPath = path.join(tempDir, `${baseName}.docx`)
+
+  if (kind === 'word') {
+    const module = await loadDoc2Docx()
+    if (module) {
+      logVerbose(verbose, '🔧 Attempting doc2docx module conversion')
+      const converted = await convertUsingModule({
+        module,
+        inputPath: filePath,
+        outputPath: tempPath,
+        baseName,
+        workspaceDir: tempDir,
+        originalDocxInfo,
+        verbose
+      })
+
+      if (converted) {
+        logVerbose(verbose, `✅ doc2docx module produced ${tempPath}`)
+        return { tempPath, cleanup }
+      }
+
+      logVerbose(verbose, '⚠️ doc2docx module did not produce a DOCX output, trying CLI fallback')
+    } else {
+      logVerbose(verbose, 'ℹ️ doc2docx module not available, attempting CLI conversion')
+    }
+
+    const cliConverted = await convertUsingCli({
+      filePath,
+      tempDir,
+      outputPath: tempPath,
+      baseName,
+      originalDocxInfo,
+      verbose
+    })
+
+    if (cliConverted) {
+      logVerbose(verbose, `✅ doc2docx CLI produced ${tempPath}`)
+      return { tempPath, cleanup }
+    }
+
+    logVerbose(verbose, '⚠️ doc2docx conversion attempts failed, reverting to text extraction fallback')
+  }
+
   const buffer = await fs.readFile(filePath)
   const lines = extractBinaryLines(buffer)
 
   logVerbose(verbose, `🧵 Extracted ${lines.length} text segment(s) from binary ${kind} file`)
 
   if (lines.length === 0) {
+    await cleanup()
     throw new Error(`No textual content could be extracted from ${path.basename(filePath)}. The file may require manual conversion.`)
   }
 
   const docxBuffer = buildDocxBuffer(lines)
-  const baseName = path.basename(filePath, ext) || 'converted'
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-renamer-legacy-'))
-  const tempPath = path.join(tempDir, `${baseName}.docx`)
   await fs.writeFile(tempPath, docxBuffer)
-  logVerbose(verbose, `📦 Wrote temporary DOCX to ${tempPath}`)
-
-  const cleanup = async () => {
-    await fs.rm(tempDir, { recursive: true, force: true })
-    logVerbose(verbose, `🧹 Removed temporary directory ${tempDir}`)
-  }
+  logVerbose(verbose, `📦 Wrote fallback DOCX to ${tempPath}`)
 
   return { tempPath, cleanup }
 }
