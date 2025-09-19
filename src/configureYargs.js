@@ -77,6 +77,12 @@ module.exports = async () => {
       alias: 'r',
       type: 'string',
       description: 'Add a custom prompt to the LLM (e.g. "Only describe the background")'
+    })
+    .option('convertbinary', {
+      alias: 'convert-binary',
+      type: 'boolean',
+      description: 'Convert legacy binary Microsoft Office documents before parsing',
+      default: config.defaultConvertBinary || false
     }).argv
 
   if (argv.help) {
@@ -131,6 +137,11 @@ module.exports = async () => {
 
   if (argv['custom-prompt']) {
     config.defaultCustomPrompt = argv['custom-prompt']
+    await saveConfig({ config })
+  }
+
+  if (process.argv.includes('--convertbinary') || process.argv.includes('--convert-binary') || process.argv.includes('--no-convertbinary') || process.argv.includes('--no-convert-binary')) {
+    config.defaultConvertBinary = argv.convertbinary
     await saveConfig({ config })
   }
 
