@@ -18,6 +18,11 @@ const BINARY_OFFICE_KINDS = {
   '.xlt': 'spreadsheet'
 }
 
+const logVerbose = (verbose, message) => {
+  if (!verbose) return
+  console.log(message)
+}
+
 const escapeXml = (input) => {
   if (!input) return ''
   return input
@@ -205,14 +210,17 @@ const buildDocxBuffer = (lines) => {
   return createStoredZip(files)
 }
 
-const convertBinaryOfficeToDocx = async ({ filePath, ext }) => {
+const convertBinaryOfficeToDocx = async ({ filePath, ext, verbose = false }) => {
   const kind = BINARY_OFFICE_KINDS[ext]
   if (!kind) {
     throw new Error(`Unsupported binary Office extension: ${ext}`)
   }
 
+  logVerbose(verbose, `⚙️ Starting legacy ${kind} conversion for ${path.basename(filePath)}`)
   const buffer = await fs.readFile(filePath)
   const lines = extractBinaryLines(buffer)
+
+  logVerbose(verbose, `🧵 Extracted ${lines.length} text segment(s) from binary ${kind} file`)
 
   if (lines.length === 0) {
     throw new Error(`No textual content could be extracted from ${path.basename(filePath)}. The file may require manual conversion.`)
@@ -223,9 +231,11 @@ const convertBinaryOfficeToDocx = async ({ filePath, ext }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-renamer-legacy-'))
   const tempPath = path.join(tempDir, `${baseName}.docx`)
   await fs.writeFile(tempPath, docxBuffer)
+  logVerbose(verbose, `📦 Wrote temporary DOCX to ${tempPath}`)
 
   const cleanup = async () => {
     await fs.rm(tempDir, { recursive: true, force: true })
+    logVerbose(verbose, `🧹 Removed temporary directory ${tempDir}`)
   }
 
   return { tempPath, cleanup }

@@ -16,7 +16,8 @@ module.exports = async ({
   defaultProvider,
   defaultCustomPrompt,
   defaultIncludeSubdirectories,
-  defaultConvertBinary
+  defaultConvertBinary,
+  defaultVerbose
 }) => {
   try {
     const provider = defaultProvider || 'ollama'
@@ -63,6 +64,9 @@ module.exports = async ({
     const convertBinary = Boolean(defaultConvertBinary)
     console.log(`⚪ Convert legacy Office binaries: ${convertBinary}`)
 
+    const verbose = Boolean(defaultVerbose)
+    console.log(`⚪ Verbose logging: ${verbose}`)
+
     console.log('--------------------------------------------------')
 
     const stats = await fs.stat(inputPath)
@@ -78,7 +82,8 @@ module.exports = async ({
       inputPath,
       includeSubdirectories,
       customPrompt,
-      convertBinary
+      convertBinary,
+      verbose
     }
 
     if (stats.isDirectory()) {

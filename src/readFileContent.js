@@ -5,6 +5,11 @@ const pdf = require('pdf-parse')
 
 const { convertBinaryOfficeToDocx } = require('./binaryOfficeConversion')
 
+const logVerbose = (verbose, message) => {
+  if (!verbose) return
+  console.log(message)
+}
+
 const DOCX_LIKE_EXTENSIONS = new Set(['.docx', '.docm', '.dotx', '.dotm'])
 const PPTX_LIKE_EXTENSIONS = new Set(['.pptx', '.pptm', '.ppsx', '.ppsm', '.potx', '.potm'])
 const XLSX_LIKE_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xlsb', '.xltx', '.xltm'])
@@ -435,49 +440,66 @@ const readRtf = async (filePath) => {
   return normalizeWhitespace(normalized)
 }
 
-module.exports = async ({ filePath, convertBinary = false }) => {
+module.exports = async ({ filePath, convertBinary = false, verbose = false }) => {
   const ext = path.extname(filePath).toLowerCase()
+  const fileName = path.basename(filePath)
+
+  logVerbose(verbose, `📚 Reading ${fileName} (extension: ${ext || 'none'})`)
 
   if (ext === '.pdf') {
+    logVerbose(verbose, '📑 Parsing PDF document')
     return readPdf(filePath)
   }
 
   if (DOCX_LIKE_EXTENSIONS.has(ext)) {
+    logVerbose(verbose, '📝 Parsing DOCX-like archive')
     return readDocxLike(filePath)
   }
 
   if (PPTX_LIKE_EXTENSIONS.has(ext)) {
+    logVerbose(verbose, '🖼️ Parsing PPTX-like presentation')
     return readPptxLike(filePath)
   }
 
   if (XLSX_LIKE_EXTENSIONS.has(ext)) {
+    logVerbose(verbose, '📊 Parsing XLSX-like spreadsheet')
     return readXlsxLike(filePath)
   }
 
   if (KEYNOTE_EXTENSIONS.has(ext)) {
+    logVerbose(verbose, '🗣️ Parsing Keynote presentation bundle')
     return readKeynote(filePath)
   }
 
   if (OPEN_DOCUMENT_TEXT_EXTENSIONS.has(ext) || OPEN_DOCUMENT_PRESENTATION_EXTENSIONS.has(ext) || OPEN_DOCUMENT_SPREADSHEET_EXTENSIONS.has(ext)) {
+    logVerbose(verbose, '🧭 Parsing OpenDocument file')
     return readOpenDocument(filePath)
   }
 
   if (ext === '.rtf') {
+    logVerbose(verbose, '📜 Parsing RTF document')
     return readRtf(filePath)
   }
 
   if (BINARY_OFFICE_WARNINGS[ext]) {
     if (convertBinary) {
-      const { tempPath, cleanup } = await convertBinaryOfficeToDocx({ filePath, ext })
+      logVerbose(verbose, `⚙️ Converting legacy ${ext} file for ${fileName}`)
+      const { tempPath, cleanup } = await convertBinaryOfficeToDocx({ filePath, ext, verbose })
       try {
-        return await readDocxLike(tempPath)
+        const text = await readDocxLike(tempPath)
+        logVerbose(verbose, `🧾 Extracted text from converted document at ${tempPath}`)
+        return text
       } finally {
         await cleanup()
+        logVerbose(verbose, `🧹 Cleaned temporary files for ${fileName}`)
       }
     }
+
+    logVerbose(verbose, `⚠️ Conversion disabled for ${fileName}; raising warning`)
     throw new Error(BINARY_OFFICE_WARNINGS[ext])
   }
 
+  logVerbose(verbose, '📄 Reading file as UTF-8 text')
   const content = await fs.readFile(filePath, 'utf8')
   return typeof content === 'string' ? content : content.toString('utf8')
 }

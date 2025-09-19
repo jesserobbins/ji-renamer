@@ -83,6 +83,12 @@ module.exports = async () => {
       type: 'boolean',
       description: 'Convert legacy binary Microsoft Office documents before parsing',
       default: config.defaultConvertBinary || false
+    })
+    .option('verbose', {
+      alias: 'V',
+      type: 'boolean',
+      description: 'Enable verbose logging',
+      default: config.defaultVerbose || false
     }).argv
 
   if (argv.help) {
@@ -142,6 +148,15 @@ module.exports = async () => {
 
   if (process.argv.includes('--convertbinary') || process.argv.includes('--convert-binary') || process.argv.includes('--no-convertbinary') || process.argv.includes('--no-convert-binary')) {
     config.defaultConvertBinary = argv.convertbinary
+    await saveConfig({ config })
+  }
+
+  const verboseProvided = process.argv.some((arg) => {
+    return arg === '--verbose' || arg === '--no-verbose' || arg === '-V' || arg.startsWith('--verbose=') || arg.startsWith('--no-verbose=')
+  })
+
+  if (verboseProvided) {
+    config.defaultVerbose = argv.verbose
     await saveConfig({ config })
   }
 
