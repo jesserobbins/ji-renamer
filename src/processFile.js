@@ -1,5 +1,6 @@
 const path = require('path')
 const { v4: uuidv4 } = require('uuid')
+const readline = require('readline')
 
 const isImage = require('./isImage')
 const isVideo = require('./isVideo')
@@ -15,13 +16,52 @@ const logVerbose = (verbose, message) => {
   console.log(message)
 }
 
+const promptForConfirmation = async ({ question, forceChange, nonInteractiveMessage }) => {
+  if (forceChange) return true
+
+  if (!process.stdin.isTTY) {
+    if (nonInteractiveMessage) {
+      console.log(nonInteractiveMessage)
+    }
+    return false
+  }
+
+  return await new Promise(resolve => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    })
+
+    rl.question(question, answer => {
+      rl.close()
+      const normalized = answer.trim().toLowerCase()
+      resolve(normalized === 'y' || normalized === 'yes')
+    })
+  })
+}
+
 module.exports = async options => {
+  const { filePath } = options
+  let framesOutputDir
+  let ext
+  let verboseFlag = false
+  let relativeFilePath = ''
+
   try {
-    const { frames, filePath, inputPath, convertBinary, verbose } = options
+    const {
+      frames,
+      inputPath,
+      convertBinary,
+      verbose,
+      forceChange,
+      recordLogEntry
+    } = options
+
+    verboseFlag = verbose
 
     const fileName = path.basename(filePath)
-    const ext = path.extname(filePath).toLowerCase()
-    const relativeFilePath = path.relative(inputPath, filePath)
+    ext = path.extname(filePath).toLowerCase()
+    relativeFilePath = path.relative(inputPath, filePath) || fileName
 
     logVerbose(verbose, `🔍 Processing file: ${relativeFilePath}`)
 
@@ -35,7 +75,6 @@ module.exports = async options => {
     let content
     let videoPrompt
     let images = []
-    let framesOutputDir
     if (isImage({ ext })) {
       logVerbose(verbose, `🖼️ Detected image: ${relativeFilePath}`)
       images.push(filePath)
@@ -60,18 +99,57 @@ module.exports = async options => {
       logVerbose(verbose, `✅ Extracted ${content.length} characters from ${relativeFilePath}`)
     }
 
-    const newName = await getNewName({ ...options, images, content, videoPrompt, relativeFilePath })
-    if (!newName) return
+    const newNameResult = await getNewName({ ...options, images, content, videoPrompt, relativeFilePath })
+    if (!newNameResult || !newNameResult.filename) return
 
-    const newFileName = await saveFile({ ext, newName, filePath })
+    const { filename: proposedName, context: nameContext } = newNameResult
+
+    if (nameContext && nameContext.summary) {
+      console.log(`ℹ️ ${nameContext.summary}`)
+    }
+
+    const proposedRelativeNewPath = path.join(path.dirname(relativeFilePath), `${proposedName}${ext}`)
+    const confirmed = await promptForConfirmation({
+      question: `Rename "${relativeFilePath}" to "${proposedRelativeNewPath}"? (y/N): `,
+      forceChange,
+      nonInteractiveMessage: `🟡 Skipping rename for ${relativeFilePath} because confirmations are required but no interactive terminal is available. Use --force-change to bypass prompts.`
+    })
+
+    if (!confirmed) {
+      console.log(`⚪ Skipped rename: ${relativeFilePath}`)
+      return
+    }
+
+    const newFileName = await saveFile({ ext, newName: proposedName, filePath })
     const relativeNewFilePath = path.join(path.dirname(relativeFilePath), newFileName)
     console.log(`🟢 Renamed: ${relativeFilePath} to ${relativeNewFilePath}`)
 
-    if (isVideo({ ext }) && framesOutputDir) {
-      logVerbose(verbose, `🧹 Cleaning up extracted frames for ${relativeFilePath}`)
-      await deleteDirectory({ folderPath: framesOutputDir })
+    if (typeof recordLogEntry === 'function') {
+      const newAbsolutePath = path.resolve(path.dirname(filePath), newFileName)
+      const confirmationSource = forceChange ? 'force-change flag' : 'user confirmed'
+      const logEntry = {
+        originalPath: path.resolve(filePath),
+        newPath: newAbsolutePath,
+        originalName: path.basename(filePath),
+        newName: newFileName,
+        originalRelativePath: relativeFilePath,
+        newRelativePath: relativeNewFilePath,
+        acceptedAt: new Date().toISOString(),
+        confirmation: confirmationSource,
+        context: nameContext
+      }
+      recordLogEntry(logEntry)
     }
   } catch (err) {
     console.log(err.message)
+  } finally {
+    if (ext && isVideo({ ext }) && framesOutputDir) {
+      logVerbose(verboseFlag, `🧹 Cleaning up extracted frames for ${relativeFilePath || filePath}`)
+      try {
+        await deleteDirectory({ folderPath: framesOutputDir })
+      } catch (cleanupError) {
+        console.log(`🔴 Failed to clean up frames for ${relativeFilePath || filePath}: ${cleanupError.message}`)
+      }
+    }
   }
 }

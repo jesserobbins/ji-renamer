@@ -89,6 +89,22 @@ module.exports = async () => {
       type: 'boolean',
       description: 'Enable verbose logging',
       default: config.defaultVerbose || false
+    })
+    .option('force-change', {
+      alias: 'F',
+      type: 'boolean',
+      description: 'Apply suggested filenames without prompting for confirmation',
+      default: config.defaultForceChange || false
+    })
+    .option('log-path', {
+      type: 'string',
+      description: 'Path to write the run log (defaults to command name plus timestamp)',
+      default: config.defaultLogPath
+    })
+    .option('log', {
+      type: 'boolean',
+      description: 'Write a run log detailing all accepted renames',
+      default: config.defaultLog !== undefined ? config.defaultLog : true
     }).argv
 
   if (argv.help) {
@@ -157,6 +173,29 @@ module.exports = async () => {
 
   if (verboseProvided) {
     config.defaultVerbose = argv.verbose
+    await saveConfig({ config })
+  }
+
+  const forceProvided = process.argv.some((arg) => {
+    return arg === '--force-change' || arg === '--no-force-change' || arg === '-F' || arg.startsWith('--force-change=') || arg.startsWith('--no-force-change=')
+  })
+
+  if (forceProvided) {
+    config.defaultForceChange = argv['force-change']
+    await saveConfig({ config })
+  }
+
+  if (argv['log-path']) {
+    config.defaultLogPath = argv['log-path']
+    await saveConfig({ config })
+  }
+
+  const logProvided = process.argv.some((arg) => {
+    return arg === '--log' || arg === '--no-log' || arg.startsWith('--log=') || arg.startsWith('--no-log=')
+  })
+
+  if (logProvided) {
+    config.defaultLog = argv.log
     await saveConfig({ config })
   }
 

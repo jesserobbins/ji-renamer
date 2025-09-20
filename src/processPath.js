@@ -1,4 +1,5 @@
 const fs = require('fs').promises
+const path = require('path')
 
 const processFile = require('./processFile')
 const chooseModel = require('./chooseModel')
@@ -17,7 +18,10 @@ module.exports = async ({
   defaultCustomPrompt,
   defaultIncludeSubdirectories,
   defaultConvertBinary,
-  defaultVerbose
+  defaultVerbose,
+  defaultForceChange,
+  defaultLogPath,
+  defaultLog
 }) => {
   try {
     const provider = defaultProvider || 'ollama'
@@ -67,6 +71,48 @@ module.exports = async ({
     const verbose = Boolean(defaultVerbose)
     console.log(`⚪ Verbose logging: ${verbose}`)
 
+    const forceChange = Boolean(defaultForceChange)
+    console.log(`⚪ Skip confirmation prompts: ${forceChange}`)
+
+    const logEnabled = defaultLog !== undefined ? defaultLog : true
+    console.log(`⚪ Write run log: ${logEnabled}`)
+
+    const deriveCommandLabel = () => {
+      const argvSegments = process.argv.slice(1)
+      for (let i = argvSegments.length - 1; i >= 0; i--) {
+        const base = path.basename(argvSegments[i])
+        if (base.toLowerCase().includes('ai-renamer')) {
+          return 'ai-renamer'
+        }
+      }
+
+      const scriptName = process.argv[1] ? path.basename(process.argv[1]) : null
+      if (scriptName === 'index.js') return 'ai-renamer'
+      if (scriptName) return scriptName.replace(/\.js$/i, '')
+
+      const binary = process.argv[0] ? path.basename(process.argv[0]) : 'ai-renamer'
+      return binary || 'ai-renamer'
+    }
+
+    const sanitizeForFilename = (value) => {
+      return value
+        .replace(/[^a-z0-9-_]+/gi, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'ai-renamer'
+    }
+
+    const commandLabel = sanitizeForFilename(deriveCommandLabel())
+    const timestamp = new Date().toISOString().replace(/[:]/g, '-')
+    const defaultLogFileName = `${commandLabel}-${timestamp}.log`
+
+    const resolvedLogPath = logEnabled
+      ? path.resolve(defaultLogPath || defaultLogFileName)
+      : null
+
+    if (logEnabled) {
+      console.log(`⚪ Log file: ${resolvedLogPath}`)
+    }
+
     console.log('--------------------------------------------------')
 
     const stats = await fs.stat(inputPath)
@@ -83,13 +129,54 @@ module.exports = async ({
       includeSubdirectories,
       customPrompt,
       convertBinary,
-      verbose
+      verbose,
+      forceChange,
+      logEnabled,
+      resolvedLogPath
+    }
+
+    const logEntries = []
+
+    const recordLogEntry = entry => {
+      if (!logEnabled) return
+      logEntries.push(entry)
     }
 
     if (stats.isDirectory()) {
-      await processDirectory({ options, inputPath })
+      await processDirectory({ options: { ...options, recordLogEntry }, inputPath })
     } else if (stats.isFile()) {
-      await processFile({ ...options, filePath: inputPath })
+      await processFile({ ...options, recordLogEntry, filePath: inputPath })
+    }
+
+    if (logEnabled) {
+      try {
+        await fs.mkdir(path.dirname(resolvedLogPath), { recursive: true })
+        const logPayload = {
+          generatedAt: new Date().toISOString(),
+          command: process.argv,
+          inputPath,
+          settings: {
+            provider,
+            baseURL,
+            model,
+            frames,
+            case: _case,
+            chars,
+            language,
+            includeSubdirectories,
+            customPrompt,
+            convertBinary,
+            verbose,
+            forceChange
+          },
+          renames: logEntries
+        }
+
+        await fs.writeFile(resolvedLogPath, JSON.stringify(logPayload, null, 2))
+        console.log(`📝 Run log saved to ${resolvedLogPath}`)
+      } catch (err) {
+        console.log(`🔴 Failed to write log: ${err.message}`)
+      }
     }
   } catch (err) {
     console.log(err.message)

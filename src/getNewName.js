@@ -141,17 +141,80 @@ module.exports = async options => {
 
     const safeCharLimit = Number.isFinite(chars) && chars > 0 ? Math.floor(chars) : 20
     const candidateLimit = Math.min(safeCharLimit + 20, 120)
-    const candidate = extractFilenameCandidate({ modelResult, maxChars: candidateLimit }) || 'renamed file'
+    const extractedCandidate = extractFilenameCandidate({ modelResult, maxChars: candidateLimit })
+    const candidate = extractedCandidate || 'renamed file'
 
     let filename = await changeCase({ text: candidate, _case })
+    const afterCase = filename
     filename = enforceLengthLimit(filename, safeCharLimit)
+
+    let usedFallback = false
+    if (!extractedCandidate) {
+      usedFallback = true
+    }
+
+    let truncated = false
+    if (afterCase && filename && afterCase !== filename) {
+      truncated = true
+    }
 
     if (!filename) {
       const fallbackName = await changeCase({ text: 'renamed file', _case })
-      filename = enforceLengthLimit(fallbackName, safeCharLimit)
+      const enforcedFallback = enforceLengthLimit(fallbackName, safeCharLimit)
+      if (enforcedFallback) {
+        filename = enforcedFallback
+        usedFallback = true
+        truncated = enforcedFallback.length < fallbackName.length
+      }
     }
 
-    return filename
+    if (!filename) return null
+
+    const summaryParts = []
+    if (usedFallback) {
+      summaryParts.push('Used fallback phrase because the model response did not include a clean filename.')
+    } else {
+      summaryParts.push(`Used model candidate "${candidate}".`)
+    }
+    summaryParts.push(`Applied ${_case} case and a ${safeCharLimit}-character limit.`)
+    if (truncated) {
+      summaryParts.push('The result was shortened to satisfy the length constraint.')
+    }
+    if (videoPrompt) {
+      summaryParts.push('Video frame summary influenced the prompt.')
+    }
+    if (content) {
+      summaryParts.push('Text was extracted from the source file before generating the name.')
+    }
+    if (customPrompt) {
+      summaryParts.push('Custom instructions were included in the prompt.')
+    }
+
+    const summary = summaryParts.join(' ')
+
+    const source = content
+      ? 'text'
+      : Array.isArray(options.images) && options.images.length > 0
+        ? 'visual'
+        : 'prompt-only'
+
+    const context = {
+      summary,
+      candidate,
+      usedFallback,
+      caseStyle: _case,
+      charLimit: safeCharLimit,
+      truncated,
+      finalName: filename,
+      source,
+      modelResponse: modelResult,
+      modelResponsePreview: modelResult ? modelResult.slice(0, 280) : null,
+      customPromptIncluded: Boolean(customPrompt),
+      videoSummaryIncluded: Boolean(videoPrompt),
+      contentLength: content ? content.length : 0
+    }
+
+    return { filename, context }
   } catch (err) {
     console.log(`🔴 Model error: ${err.message} (${relativeFilePath})`)
   }
