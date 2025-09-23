@@ -1,12 +1,14 @@
 const path = require('path')
-const os = require('os')
 const { promises: fs } = require('fs')
-const { execFile } = require('child_process')
-const { promisify } = require('util')
 const { inflateRawSync } = require('zlib')
 const pdf = require('pdf-parse')
 
-const execFileAsync = promisify(execFile)
+const { convertBinaryOfficeToDocx } = require('./binaryOfficeConversion')
+
+const logVerbose = (verbose, message) => {
+  if (!verbose) return
+  console.log(message)
+}
 
 const DOCX_LIKE_EXTENSIONS = new Set(['.docx', '.docm', '.dotx', '.dotm'])
 const PPTX_LIKE_EXTENSIONS = new Set(['.pptx', '.pptm', '.ppsx', '.ppsm', '.potx', '.potm'])
@@ -101,6 +103,7 @@ const parseZipEntries = (buffer) => {
       continue
     }
 
+
     const localFileNameLength = buffer.readUInt16LE(localHeaderOffset + 26)
     const localExtraFieldLength = buffer.readUInt16LE(localHeaderOffset + 28)
     const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraFieldLength
@@ -119,6 +122,7 @@ const parseZipEntries = (buffer) => {
     entries.set(fileName, decompressed)
 
     offset = nameStart + fileNameLength + extraFieldLength + commentLength
+
   }
 
   return entries
@@ -417,64 +421,7 @@ const readOpenDocument = async (filePath) => {
   const buffer = await fs.readFile(filePath)
   const entries = parseZipEntries(buffer)
   return extractOpenDocumentText(entries)
-}
 
-const BINARY_OFFICE_CONVERSIONS = {
-  '.doc': { format: 'docx', outputExt: '.docx', reader: readDocxLike },
-  '.dot': { format: 'docx', outputExt: '.docx', reader: readDocxLike },
-  '.ppt': { format: 'pptx', outputExt: '.pptx', reader: readPptxLike },
-  '.pps': { format: 'pptx', outputExt: '.pptx', reader: readPptxLike },
-  '.pot': { format: 'pptx', outputExt: '.pptx', reader: readPptxLike },
-  '.xls': { format: 'xlsx', outputExt: '.xlsx', reader: readXlsxLike },
-  '.xlt': { format: 'xlsx', outputExt: '.xlsx', reader: readXlsxLike }
-}
-
-const LIBREOFFICE_CANDIDATES = ['soffice', 'libreoffice']
-
-const convertBinaryOffice = async ({ filePath, ext }) => {
-  const conversion = BINARY_OFFICE_CONVERSIONS[ext]
-  if (!conversion) {
-    throw new Error(BINARY_OFFICE_WARNINGS[ext] || `Unsupported binary Office extension: ${ext}`)
-  }
-
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-renamer-'))
-  const args = ['--headless', '--convert-to', conversion.format, '--outdir', tempDir, filePath]
-
-  let lastError = null
-  for (const candidate of LIBREOFFICE_CANDIDATES) {
-    try {
-      await execFileAsync(candidate, args)
-      lastError = null
-      break
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        lastError = err
-        continue
-      }
-      await fs.rm(tempDir, { recursive: true, force: true })
-      throw new Error(`LibreOffice failed to convert ${path.basename(filePath)}: ${err.message}`)
-    }
-  }
-
-  if (lastError) {
-    await fs.rm(tempDir, { recursive: true, force: true })
-    throw new Error('LibreOffice (soffice) is required for --convertbinary but was not found in PATH. Install LibreOffice or convert the file manually.')
-  }
-
-  const convertedPath = path.join(tempDir, `${path.basename(filePath, ext)}${conversion.outputExt}`)
-
-  try {
-    await fs.access(convertedPath)
-  } catch (err) {
-    await fs.rm(tempDir, { recursive: true, force: true })
-    throw new Error(`LibreOffice reported success but ${path.basename(convertedPath)} was not generated.`)
-  }
-
-  try {
-    return await conversion.reader(convertedPath)
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true })
-  }
 }
 
 const readRtf = async (filePath) => {
@@ -496,43 +443,76 @@ const readRtf = async (filePath) => {
   return normalizeWhitespace(normalized)
 }
 
-module.exports = async ({ filePath, convertBinary = false }) => {
+
+module.exports = async ({ filePath, convertBinary = false, verbose = false }) => {
   const ext = path.extname(filePath).toLowerCase()
+  const fileName = path.basename(filePath)
+
+  logVerbose(verbose, `📚 Reading ${fileName} (extension: ${ext || 'none'})`)
 
   if (ext === '.pdf') {
+    logVerbose(verbose, '📑 Parsing PDF document')
+
     return readPdf(filePath)
   }
 
   if (DOCX_LIKE_EXTENSIONS.has(ext)) {
+
+    logVerbose(verbose, '📝 Parsing DOCX-like archive')
     return readDocxLike(filePath)
   }
 
   if (PPTX_LIKE_EXTENSIONS.has(ext)) {
+
+    logVerbose(verbose, '🖼️ Parsing PPTX-like presentation')
+
     return readPptxLike(filePath)
   }
 
   if (XLSX_LIKE_EXTENSIONS.has(ext)) {
+
+    logVerbose(verbose, '📊 Parsing XLSX-like spreadsheet')
+
     return readXlsxLike(filePath)
   }
 
   if (KEYNOTE_EXTENSIONS.has(ext)) {
+
+    logVerbose(verbose, '🗣️ Parsing Keynote presentation bundle')
     return readKeynote(filePath)
   }
 
   if (OPEN_DOCUMENT_TEXT_EXTENSIONS.has(ext) || OPEN_DOCUMENT_PRESENTATION_EXTENSIONS.has(ext) || OPEN_DOCUMENT_SPREADSHEET_EXTENSIONS.has(ext)) {
+
+    logVerbose(verbose, '🧭 Parsing OpenDocument file')
     return readOpenDocument(filePath)
   }
 
   if (ext === '.rtf') {
+    logVerbose(verbose, '📜 Parsing RTF document')
     return readRtf(filePath)
   }
 
   if (BINARY_OFFICE_WARNINGS[ext]) {
     if (convertBinary) {
-      return convertBinaryOffice({ filePath, ext })
+
+      logVerbose(verbose, `⚙️ Converting legacy ${ext} file for ${fileName}`)
+      const { tempPath, cleanup } = await convertBinaryOfficeToDocx({ filePath, ext, verbose })
+      try {
+        const text = await readDocxLike(tempPath)
+        logVerbose(verbose, `🧾 Extracted text from converted document at ${tempPath}`)
+        return text
+      } finally {
+        await cleanup()
+        logVerbose(verbose, `🧹 Cleaned temporary files for ${fileName}`)
+      }
     }
+
+    logVerbose(verbose, `⚠️ Conversion disabled for ${fileName}; raising warning`)
     throw new Error(BINARY_OFFICE_WARNINGS[ext])
   }
+
+  logVerbose(verbose, '📄 Reading file as UTF-8 text')
 
   const content = await fs.readFile(filePath, 'utf8')
   return typeof content === 'string' ? content : content.toString('utf8')
