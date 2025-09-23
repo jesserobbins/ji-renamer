@@ -105,28 +105,6 @@ module.exports = async () => {
       type: 'boolean',
       description: 'Convert legacy binary Microsoft Office documents before parsing',
       default: config.defaultConvertBinary || false
-    })
-    .option('verbose', {
-      alias: 'V',
-      type: 'boolean',
-      description: 'Enable verbose logging',
-      default: config.defaultVerbose || false
-    })
-    .option('force-change', {
-      alias: 'F',
-      type: 'boolean',
-      description: 'Apply suggested filenames without prompting for confirmation',
-      default: config.defaultForceChange || false
-    })
-    .option('log-path', {
-      type: 'string',
-      description: 'Path to write the run log (defaults to command name plus timestamp)',
-      default: config.defaultLogPath
-    })
-    .option('log', {
-      type: 'boolean',
-      description: 'Write a run log detailing all accepted renames',
-      default: config.defaultLog !== undefined ? config.defaultLog : true
     }).argv
 
   if (argv.help) {
@@ -192,7 +170,6 @@ module.exports = async () => {
     config.defaultConvertBinary = argv.convertbinary
     await saveConfig({ config })
   }
-
   const verboseProvided = process.argv.some((arg) => {
     return arg === '--verbose' || arg === '--no-verbose' || arg === '-V' || arg.startsWith('--verbose=') || arg.startsWith('--no-verbose=')
   })
@@ -224,6 +201,5 @@ module.exports = async () => {
     config.defaultLog = argv.log
     await saveConfig({ config })
   }
-
   return { argv, config }
 }

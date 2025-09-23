@@ -77,6 +77,7 @@ module.exports = async ({
       console.log(`⚪ Custom Prompt: ${customPrompt}`)
     }
 
+
     const convertBinary = interpretBoolean(defaultConvertBinary, false)
     console.log(`⚪ Convert legacy Office binaries: ${convertBinary}`)
 
@@ -124,6 +125,7 @@ module.exports = async ({
     if (logEnabled) {
       console.log(`⚪ Log file: ${resolvedLogPath}`)
     }
+
 
     console.log('--------------------------------------------------')
 

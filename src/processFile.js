@@ -59,6 +59,7 @@ module.exports = async options => {
 
     verboseFlag = verbose
 
+
     const fileName = path.basename(filePath)
     ext = path.extname(filePath).toLowerCase()
     relativeFilePath = path.relative(inputPath, filePath) || fileName
@@ -92,6 +93,7 @@ module.exports = async options => {
     } else {
       logVerbose(verbose, `📄 Extracting text content from: ${relativeFilePath}`)
       content = await readFileContent({ filePath, convertBinary, verbose })
+
       if (!content) {
         console.log(`🔴 No text content: ${relativeFilePath}`)
         return

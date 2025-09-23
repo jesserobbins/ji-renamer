@@ -103,6 +103,7 @@ const parseZipEntries = (buffer) => {
       continue
     }
 
+
     const localFileNameLength = buffer.readUInt16LE(localHeaderOffset + 26)
     const localExtraFieldLength = buffer.readUInt16LE(localHeaderOffset + 28)
     const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraFieldLength
@@ -121,6 +122,7 @@ const parseZipEntries = (buffer) => {
     entries.set(fileName, decompressed)
 
     offset = nameStart + fileNameLength + extraFieldLength + commentLength
+
   }
 
   return entries
@@ -419,6 +421,7 @@ const readOpenDocument = async (filePath) => {
   const buffer = await fs.readFile(filePath)
   const entries = parseZipEntries(buffer)
   return extractOpenDocumentText(entries)
+
 }
 
 const readRtf = async (filePath) => {
@@ -440,6 +443,7 @@ const readRtf = async (filePath) => {
   return normalizeWhitespace(normalized)
 }
 
+
 module.exports = async ({ filePath, convertBinary = false, verbose = false }) => {
   const ext = path.extname(filePath).toLowerCase()
   const fileName = path.basename(filePath)
@@ -448,30 +452,38 @@ module.exports = async ({ filePath, convertBinary = false, verbose = false }) =>
 
   if (ext === '.pdf') {
     logVerbose(verbose, '📑 Parsing PDF document')
+
     return readPdf(filePath)
   }
 
   if (DOCX_LIKE_EXTENSIONS.has(ext)) {
+
     logVerbose(verbose, '📝 Parsing DOCX-like archive')
     return readDocxLike(filePath)
   }
 
   if (PPTX_LIKE_EXTENSIONS.has(ext)) {
+
     logVerbose(verbose, '🖼️ Parsing PPTX-like presentation')
+
     return readPptxLike(filePath)
   }
 
   if (XLSX_LIKE_EXTENSIONS.has(ext)) {
+
     logVerbose(verbose, '📊 Parsing XLSX-like spreadsheet')
+
     return readXlsxLike(filePath)
   }
 
   if (KEYNOTE_EXTENSIONS.has(ext)) {
+
     logVerbose(verbose, '🗣️ Parsing Keynote presentation bundle')
     return readKeynote(filePath)
   }
 
   if (OPEN_DOCUMENT_TEXT_EXTENSIONS.has(ext) || OPEN_DOCUMENT_PRESENTATION_EXTENSIONS.has(ext) || OPEN_DOCUMENT_SPREADSHEET_EXTENSIONS.has(ext)) {
+
     logVerbose(verbose, '🧭 Parsing OpenDocument file')
     return readOpenDocument(filePath)
   }
@@ -483,6 +495,7 @@ module.exports = async ({ filePath, convertBinary = false, verbose = false }) =>
 
   if (BINARY_OFFICE_WARNINGS[ext]) {
     if (convertBinary) {
+
       logVerbose(verbose, `⚙️ Converting legacy ${ext} file for ${fileName}`)
       const { tempPath, cleanup } = await convertBinaryOfficeToDocx({ filePath, ext, verbose })
       try {
@@ -500,6 +513,7 @@ module.exports = async ({ filePath, convertBinary = false, verbose = false }) =>
   }
 
   logVerbose(verbose, '📄 Reading file as UTF-8 text')
+
   const content = await fs.readFile(filePath, 'utf8')
   return typeof content === 'string' ? content : content.toString('utf8')
 }
