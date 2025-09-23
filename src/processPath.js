@@ -57,7 +57,19 @@ module.exports = async ({
     const language = defaultLanguage || 'English'
     console.log(`⚪ Language: ${language}`)
 
-    const includeSubdirectories = defaultIncludeSubdirectories === 'true' || false
+    const interpretBoolean = (value, fallback = false) => {
+      if (value === undefined) return fallback
+      if (typeof value === 'boolean') return value
+      if (typeof value === 'string') {
+        const lowered = value.toLowerCase()
+        if (lowered === 'true') return true
+        if (lowered === 'false') return false
+      }
+
+      return fallback
+    }
+
+    const includeSubdirectories = interpretBoolean(defaultIncludeSubdirectories, false)
     console.log(`⚪ Include subdirectories: ${includeSubdirectories}`)
 
     const customPrompt = defaultCustomPrompt || null
@@ -65,16 +77,16 @@ module.exports = async ({
       console.log(`⚪ Custom Prompt: ${customPrompt}`)
     }
 
-    const convertBinary = Boolean(defaultConvertBinary)
+    const convertBinary = interpretBoolean(defaultConvertBinary, false)
     console.log(`⚪ Convert legacy Office binaries: ${convertBinary}`)
 
-    const verbose = Boolean(defaultVerbose)
+    const verbose = interpretBoolean(defaultVerbose, false)
     console.log(`⚪ Verbose logging: ${verbose}`)
 
-    const forceChange = Boolean(defaultForceChange)
+    const forceChange = interpretBoolean(defaultForceChange, false)
     console.log(`⚪ Skip confirmation prompts: ${forceChange}`)
 
-    const logEnabled = defaultLog !== undefined ? defaultLog : true
+    const logEnabled = defaultLog !== undefined ? interpretBoolean(defaultLog, true) : true
     console.log(`⚪ Write run log: ${logEnabled}`)
 
     const deriveCommandLabel = () => {

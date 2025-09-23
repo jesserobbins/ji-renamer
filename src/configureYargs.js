@@ -6,10 +6,31 @@ const { hideBin } = require('yargs/helpers')
 
 const CONFIG_FILE = path.join(os.homedir(), 'ai-renamer.json')
 
+const normalizeBoolean = (value, fallback = undefined) => {
+  if (value === undefined) return fallback
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const lowered = value.toLowerCase()
+    if (lowered === 'true') return true
+    if (lowered === 'false') return false
+  }
+
+  return fallback
+}
+
 const loadConfig = async () => {
   try {
     const data = await fs.readFile(CONFIG_FILE, 'utf8')
-    return JSON.parse(data)
+    const parsed = JSON.parse(data)
+
+    return {
+      ...parsed,
+      defaultConvertBinary: normalizeBoolean(parsed.defaultConvertBinary, false),
+      defaultVerbose: normalizeBoolean(parsed.defaultVerbose, false),
+      defaultForceChange: normalizeBoolean(parsed.defaultForceChange, false),
+      defaultLog: normalizeBoolean(parsed.defaultLog),
+      defaultIncludeSubdirectories: normalizeBoolean(parsed.defaultIncludeSubdirectories, false)
+    }
   } catch (err) {
     return {}
   }
@@ -70,8 +91,9 @@ module.exports = async () => {
     })
     .option('include-subdirectories', {
       alias: 's',
-      type: 'string',
-      description: 'Include files in subdirectories when processing (e.g: true, false)'
+      type: 'boolean',
+      description: 'Include files in subdirectories when processing',
+      default: config.defaultIncludeSubdirectories || false
     })
     .option('custom-prompt', {
       alias: 'r',
@@ -152,7 +174,11 @@ module.exports = async () => {
     await saveConfig({ config })
   }
 
-  if (argv['include-subdirectories']) {
+  const includeSubdirectoriesProvided = process.argv.some((arg) => {
+    return arg === '--include-subdirectories' || arg === '--no-include-subdirectories' || arg === '-s' || arg.startsWith('--include-subdirectories=') || arg.startsWith('--no-include-subdirectories=')
+  })
+
+  if (includeSubdirectoriesProvided) {
     config.defaultIncludeSubdirectories = argv['include-subdirectories']
     await saveConfig({ config })
   }
