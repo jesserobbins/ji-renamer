@@ -136,35 +136,6 @@ const promptForConfirmation = async ({ question, forceChange, nonInteractiveMess
   })
 }
 
-const logVerbose = (verbose, message) => {
-  if (!verbose) return
-  console.log(message)
-}
-
-const promptForConfirmation = async ({ question, forceChange, nonInteractiveMessage }) => {
-  if (forceChange) return true
-
-  if (!process.stdin.isTTY) {
-    if (nonInteractiveMessage) {
-      console.log(nonInteractiveMessage)
-    }
-    return false
-  }
-
-  return await new Promise(resolve => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    })
-
-    rl.question(question, answer => {
-      rl.close()
-      const normalized = answer.trim().toLowerCase()
-      resolve(normalized === 'y' || normalized === 'yes')
-    })
-  })
-}
-
 module.exports = async options => {
   const { filePath } = options
   let framesOutputDir
