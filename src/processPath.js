@@ -21,6 +21,7 @@ module.exports = async ({
   defaultVerbose,
   defaultForceChange,
   defaultLogPath,
+
   defaultLog,
   defaultUseFilenameHint,
   defaultMetadataHints,
@@ -30,6 +31,7 @@ module.exports = async ({
   defaultPeopleFocus,
   defaultProjectFocus,
   defaultAcceptOnEnter
+
 }) => {
   try {
     const provider = defaultProvider || 'ollama'
@@ -85,6 +87,7 @@ module.exports = async ({
       console.log(`⚪ Custom Prompt: ${customPrompt}`)
     }
 
+
     const convertBinary = interpretBoolean(defaultConvertBinary, false)
     console.log(`⚪ Convert legacy Office binaries: ${convertBinary}`)
 
@@ -93,6 +96,7 @@ module.exports = async ({
 
     const forceChange = interpretBoolean(defaultForceChange, false)
     console.log(`⚪ Skip confirmation prompts: ${forceChange}`)
+
 
     const acceptOnEnter = interpretBoolean(defaultAcceptOnEnter, false)
     console.log(`⚪ Accept on Enter: ${acceptOnEnter}`)
@@ -141,6 +145,7 @@ module.exports = async ({
       console.log(`⚪ Prompt focus: ${promptFocus}`)
     }
 
+
     const deriveCommandLabel = () => {
       const argvSegments = process.argv.slice(1)
       for (let i = argvSegments.length - 1; i >= 0; i--) {
@@ -177,6 +182,7 @@ module.exports = async ({
       console.log(`⚪ Log file: ${resolvedLogPath}`)
     }
 
+
     console.log('--------------------------------------------------')
 
     const stats = await fs.stat(inputPath)
@@ -206,6 +212,7 @@ module.exports = async ({
       companyFocus,
       peopleFocus,
       projectFocus
+
     }
 
     const logEntries = []
@@ -224,12 +231,14 @@ module.exports = async ({
     if (logEnabled) {
       try {
         await fs.mkdir(path.dirname(resolvedLogPath), { recursive: true })
+
         const recoveryCommands = logEntries
           .filter(entry => entry && entry.revertCommand)
           .map(entry => entry.revertCommand)
         const recoveryCommandsRelative = logEntries
           .filter(entry => entry && entry.revertCommandRelative)
           .map(entry => entry.revertCommandRelative)
+
 
         const logPayload = {
           generatedAt: new Date().toISOString(),
@@ -271,6 +280,7 @@ module.exports = async ({
             'set -e',
             ...recoveryCommands
           ].join('\n')
+
         }
 
         await fs.writeFile(resolvedLogPath, JSON.stringify(logPayload, null, 2))

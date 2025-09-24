@@ -12,6 +12,7 @@ const getModelResponse = require('./getModelResponse')
 const LABEL_REGEX = /^(?:filename|file name|suggested filename|suggested file name|name|title)\s*(?:is|=|:)?\s*/i
 const QUOTE_REGEX = /[`"'“”‘’]/g
 const INVALID_FILENAME_CHARS = /[^\p{L}\p{N}\s_-]+/gu
+
 const DEFAULT_MAX_CONTENT_CHARS = 8000
 const DEFAULT_MAX_PROMPT_CHARS = 12000
 
@@ -19,6 +20,7 @@ const DEFAULT_MAX_PROMPT_CHARS = 12000
  * Strips common labels and punctuation artifacts that LLMs sprinkle around
  * filename suggestions so we can operate on a clean candidate string.
  */
+
 const sanitizeSegment = (segment) => {
   if (!segment) return ''
   const withoutQuotes = segment.replace(QUOTE_REGEX, '')
@@ -33,6 +35,7 @@ const sanitizeSegment = (segment) => {
  * Performs a gentle truncation that respects word boundaries.  This keeps the
  * filename readable even when we must enforce conservative length limits.
  */
+
 const shortenToLimit = (text, limit) => {
   if (!text || !limit || text.length <= limit) return text
   const words = text.split(/\s+/)
@@ -47,11 +50,13 @@ const shortenToLimit = (text, limit) => {
   return candidate || text.slice(0, limit)
 }
 
+
 /**
  * Walks the model response and returns the most promising filename segment.
  * The heuristics favour explicit "Filename:" style lines but gracefully fall
  * back to the full message if nothing else matches.
  */
+
 const extractFilenameCandidate = ({ modelResult, maxChars }) => {
   if (!modelResult) return ''
 
@@ -94,10 +99,12 @@ const extractFilenameCandidate = ({ modelResult, maxChars }) => {
   return shortenToLimit(fallback, maxChars)
 }
 
+
 /**
  * Ensures truncated names stop at a natural boundary (hyphen, underscore, or
  * word) whenever possible before falling back to a hard slice.
  */
+
 const trimToBoundary = (text, limit) => {
   if (!text || !limit || text.length <= limit) return text
 
@@ -125,17 +132,20 @@ const trimToBoundary = (text, limit) => {
   return text.slice(0, limit).replace(/[-_]+$/g, '')
 }
 
+
 /**
  * Applies the configured character limit to the provided filename.  The helper
  * delegates the heavy lifting to trimToBoundary so the resulting name remains
  * cleanly formatted.
  */
+
 const enforceLengthLimit = (value, limit) => {
   if (!value) return value
   if (!Number.isFinite(limit) || limit <= 0) return value
   if (value.length <= limit) return value
   return trimToBoundary(value, limit) || value.slice(0, limit)
 }
+
 
 /**
  * Truncates long context blocks for the prompt.  We prefer cutting at sentence
@@ -416,6 +426,7 @@ const composePromptLines = ({
  * downstream callers can use to display confirmation prompts and log
  * reasoning.
  */
+
 module.exports = async options => {
   const {
     _case,
@@ -683,6 +694,7 @@ module.exports = async options => {
       summaryParts.push('The composed prompt was trimmed to keep the total length within the context window.')
     }
 
+
     const summary = summaryParts.join(' ')
 
     const source = content
@@ -731,6 +743,7 @@ module.exports = async options => {
       pitchDeckDetection,
       pitchDeckSkip: false
     }
+
 
     return { filename, context }
   } catch (err) {

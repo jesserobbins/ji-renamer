@@ -136,6 +136,35 @@ const promptForConfirmation = async ({ question, forceChange, nonInteractiveMess
   })
 }
 
+const logVerbose = (verbose, message) => {
+  if (!verbose) return
+  console.log(message)
+}
+
+const promptForConfirmation = async ({ question, forceChange, nonInteractiveMessage }) => {
+  if (forceChange) return true
+
+  if (!process.stdin.isTTY) {
+    if (nonInteractiveMessage) {
+      console.log(nonInteractiveMessage)
+    }
+    return false
+  }
+
+  return await new Promise(resolve => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    })
+
+    rl.question(question, answer => {
+      rl.close()
+      const normalized = answer.trim().toLowerCase()
+      resolve(normalized === 'y' || normalized === 'yes')
+    })
+  })
+}
+
 module.exports = async options => {
   const { filePath } = options
   let framesOutputDir
@@ -150,6 +179,7 @@ module.exports = async options => {
       convertBinary,
       verbose,
       forceChange,
+
       recordLogEntry,
       metadataHints,
       useFilenameHint,
@@ -160,9 +190,11 @@ module.exports = async options => {
 
     verboseFlag = verbose
 
+
     const fileName = path.basename(filePath)
     ext = path.extname(filePath).toLowerCase()
     relativeFilePath = path.relative(inputPath, filePath) || fileName
+
 
     // Capture filesystem metadata up front so we can both feed it to the
     // language model (when enabled) and stash it in the audit log.
@@ -238,9 +270,11 @@ module.exports = async options => {
     let content
     let videoPrompt
     let images = []
+
     let pitchDeckDetection = null
     // Images and videos bypass text extraction altogether and instead use the
     // captured frames/stills as prompt context.
+
     if (isImage({ ext })) {
       logVerbose(verbose, `🖼️ Detected image: ${relativeFilePath}`)
       images.push(filePath)
@@ -256,15 +290,18 @@ module.exports = async options => {
       videoPrompt = _extractedFrames.videoPrompt
       logVerbose(verbose, `🎯 Extracted ${images.length} frame(s) from ${relativeFilePath}`)
     } else {
+
       // Everything else is treated as a document-like asset; we try to pull
       // text out of it, optionally converting legacy Office binaries first.
       logVerbose(verbose, `📄 Extracting text content from: ${relativeFilePath}`)
       content = await readFileContent({ filePath, convertBinary, verbose })
+
       if (!content) {
         console.log(`🔴 No text content: ${relativeFilePath}`)
         return
       }
       logVerbose(verbose, `✅ Extracted ${content.length} characters from ${relativeFilePath}`)
+
       if (pitchDeckOnly) {
         pitchDeckDetection = detectPitchDeck({ text: content })
         if (!pitchDeckDetection.isPitchDeck) {
@@ -332,6 +369,7 @@ module.exports = async options => {
       defaultAccept: acceptOnEnter
     })
 
+
     if (!confirmed) {
       console.log(`⚪ Skipped rename: ${relativeFilePath}`)
       return
@@ -339,6 +377,7 @@ module.exports = async options => {
 
     // We only touch the original file once the user consents; saveFile handles
     // collision-safe renaming and returns the actual name written to disk.
+
     const newFileName = await saveFile({ ext, newName: proposedName, filePath })
     const relativeNewFilePath = path.join(path.dirname(relativeFilePath), newFileName)
     const renameResultPreview = formatRenamePreview({
@@ -348,6 +387,7 @@ module.exports = async options => {
     console.log(`🟢 Renamed: ${renameResultPreview}`)
 
     if (typeof recordLogEntry === 'function') {
+
       // The recovery log stores everything needed to undo the rename later and
       // helps future debugging by recording the reasoning the model supplied.
       const newAbsolutePath = path.resolve(path.dirname(filePath), newFileName)
@@ -357,6 +397,7 @@ module.exports = async options => {
       const revertCommandRelative = `mv ${quoteForShell(relativeNewFilePath)} ${quoteForShell(relativeFilePath)}`
       const logEntry = {
         originalPath: originalAbsolutePath,
+
         newPath: newAbsolutePath,
         originalName: path.basename(filePath),
         newName: newFileName,
@@ -364,11 +405,13 @@ module.exports = async options => {
         newRelativePath: relativeNewFilePath,
         acceptedAt: new Date().toISOString(),
         confirmation: confirmationSource,
+
         context: nameContext,
         fileMetadata,
         finderTags,
         revertCommand,
         revertCommandRelative
+
       }
       recordLogEntry(logEntry)
     }

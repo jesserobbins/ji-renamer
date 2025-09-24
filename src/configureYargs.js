@@ -29,6 +29,7 @@ const loadConfig = async () => {
       defaultVerbose: normalizeBoolean(parsed.defaultVerbose, false),
       defaultForceChange: normalizeBoolean(parsed.defaultForceChange, false),
       defaultLog: normalizeBoolean(parsed.defaultLog),
+
       defaultIncludeSubdirectories: normalizeBoolean(parsed.defaultIncludeSubdirectories, false),
       defaultUseFilenameHint: normalizeBoolean(parsed.defaultUseFilenameHint, true),
       defaultMetadataHints: normalizeBoolean(parsed.defaultMetadataHints, true),
@@ -38,6 +39,7 @@ const loadConfig = async () => {
       defaultPeopleFocus: normalizeBoolean(parsed.defaultPeopleFocus, false),
       defaultProjectFocus: normalizeBoolean(parsed.defaultProjectFocus, false),
       defaultAcceptOnEnter: normalizeBoolean(parsed.defaultAcceptOnEnter, false)
+
     }
   } catch (err) {
     return {}
@@ -113,6 +115,7 @@ module.exports = async () => {
       type: 'boolean',
       description: 'Convert legacy binary Microsoft Office documents before parsing',
       default: config.defaultConvertBinary || false
+
     })
     .option('verbose', {
       alias: 'V',
@@ -175,6 +178,7 @@ module.exports = async () => {
       type: 'boolean',
       description: 'Treat an empty confirmation response as acceptance instead of rejection',
       default: config.defaultAcceptOnEnter || false
+
     }).argv
 
   if (argv.help) {
@@ -273,6 +277,7 @@ module.exports = async () => {
     await saveConfig({ config })
   }
 
+
   const filenameHintProvided = process.argv.some((arg) => {
     return arg === '--use-filename-hint' ||
       arg === '--no-use-filename-hint' ||
@@ -351,6 +356,7 @@ module.exports = async () => {
     config.defaultAcceptOnEnter = argv['accept-default']
     await saveConfig({ config })
   }
+
 
   return { argv, config }
 }
