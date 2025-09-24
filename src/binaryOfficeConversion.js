@@ -1,3 +1,13 @@
+
+/**
+ * Converts legacy binary Office documents (DOC, PPT, XLS, etc.) into lightweight
+ * OOXML containers so the rest of the pipeline can extract text without pulling
+ * in heavyweight dependencies.  The implementation favours clarity over raw
+ * performance: detailed comments explain the pseudo-ZIP writer and the fallback
+ * paths so future maintainers can adjust or replace pieces as needed.
+ */
+
+
 const path = require('path')
 const os = require('os')
 const { promises: fs } = require('fs')
@@ -66,6 +76,13 @@ const crc32 = (buffer) => {
   }
   return (crc ^ 0xffffffff) >>> 0
 }
+
+
+/**
+ * Writes the minimal set of ZIP structures needed for Word to consider the
+ * output a valid DOCX package.  We store entries uncompressed to keep the math
+ * simple and to avoid extra dependencies.
+ */
 
 const createStoredZip = (files) => {
   const localParts = []
@@ -136,6 +153,11 @@ const createStoredZip = (files) => {
   return Buffer.concat([localSection, centralSection, eocd])
 }
 
+
+// The next three helpers pull human-readable strings out of the binary blob by
+// scanning for ASCII/Unicode runs.  They are intentionally conservative so we
+// avoid flooding the rename prompt with garbage characters.
+
 const collectSegments = (text, matchRegex, stripRegex) => {
   if (!text) return []
   const matches = text.match(matchRegex) || []
@@ -176,6 +198,14 @@ const extractBinaryLines = (buffer) => {
 
   return lines
 }
+
+
+/**
+ * Produces a bare-bones DOCX structure containing the extracted lines so the
+ * existing OOXML parser can reuse it.  The generated package intentionally
+ * omits advanced Word features because we only need enough fidelity for text
+ * extraction.
+ */
 
 const buildDocxBuffer = (lines) => {
   const paragraphs = lines.length > 0 ? lines : ['Converted legacy Office document']
@@ -263,6 +293,11 @@ const findConvertedFile = async ({ dir, baseName, extensions }) => {
   }
 }
 
+
+// After running doc2docx we hunt for the actual DOCX file because different
+// entry points emit to slightly different directories.  Once located we copy it
+// to the requested outputPath and clean up any stray intermediates.
+
 const ensureOutputPath = async ({
   searchDirs,
   outputPath,
@@ -294,6 +329,10 @@ const ensureOutputPath = async ({
 
   return false
 }
+
+
+// The doc2docx module exports several signatures depending on version.  We try
+// each one until we successfully produce a DOCX file.
 
 const runDoc2DocxFunction = async ({
   fn,
@@ -333,6 +372,10 @@ const runDoc2DocxFunction = async ({
   return false
 }
 
+
+// First preference: call doc2docx as a library.  This avoids spawning child
+// processes and is friendlier in bundled environments.
+
 const convertUsingModule = async ({
   module,
   inputPath,
@@ -367,6 +410,10 @@ const convertUsingModule = async ({
 
   return false
 }
+
+
+// Fallback path: spawn the doc2docx CLI if the module export was unavailable or
+// failed.  We mirror the same cleanup behavior so callers can remain agnostic.
 
 const convertUsingCli = async ({
   filePath,
@@ -434,13 +481,23 @@ const convertUsingCli = async ({
   return conversionSucceeded
 }
 
+
+/**
+ * Main entry point exposed to the rest of the app.  Attempts doc2docx
+ * conversion first (library, then CLI) and finally falls back to the
+ * lightweight text-extraction DOCX writer.
+ */
+
 const convertBinaryOfficeToDocx = async ({ filePath, ext, verbose = false }) => {
   const kind = BINARY_OFFICE_KINDS[ext]
   if (!kind) {
     throw new Error(`Unsupported binary Office extension: ${ext}`)
   }
 
-  const baseName = path.basename(filePath, ext) || 'converted'
+
+  const parsedPath = path.parse(filePath)
+  const baseName = (parsedPath && parsedPath.name) ? parsedPath.name : 'converted'
+
   const originalDocxPath = path.join(path.dirname(filePath), `${baseName}.docx`)
   const originalDocxExists = await fileExists(originalDocxPath)
   const originalDocxInfo = { path: originalDocxPath, existed: originalDocxExists }
@@ -499,6 +556,9 @@ const convertBinaryOfficeToDocx = async ({ filePath, ext, verbose = false }) => 
     logVerbose(verbose, '⚠️ doc2docx conversion attempts failed, reverting to text extraction fallback')
   }
 
+  // Final fallback: skim the binary for readable strings and wrap them in a
+  // synthetic DOCX so downstream text extraction can proceed.
+
   const buffer = await fs.readFile(filePath)
   const lines = extractBinaryLines(buffer)
 
@@ -512,6 +572,9 @@ const convertBinaryOfficeToDocx = async ({ filePath, ext, verbose = false }) => 
   const docxBuffer = buildDocxBuffer(lines)
   await fs.writeFile(tempPath, docxBuffer)
   logVerbose(verbose, `📦 Wrote fallback DOCX to ${tempPath}`)
+
+  // Callers receive the path to the temporary DOCX along with a cleanup helper
+  // so they can dispose of it once text extraction finishes.
 
   return { tempPath, cleanup }
 }

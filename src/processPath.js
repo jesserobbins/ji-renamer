@@ -21,7 +21,17 @@ module.exports = async ({
   defaultVerbose,
   defaultForceChange,
   defaultLogPath,
-  defaultLog
+
+  defaultLog,
+  defaultUseFilenameHint,
+  defaultMetadataHints,
+  defaultAppendTags,
+  defaultPitchDeckOnly,
+  defaultCompanyFocus,
+  defaultPeopleFocus,
+  defaultProjectFocus,
+  defaultAcceptOnEnter
+
 }) => {
   try {
     const provider = defaultProvider || 'ollama'
@@ -87,8 +97,54 @@ module.exports = async ({
     const forceChange = interpretBoolean(defaultForceChange, false)
     console.log(`⚪ Skip confirmation prompts: ${forceChange}`)
 
+
+    const acceptOnEnter = interpretBoolean(defaultAcceptOnEnter, false)
+    console.log(`⚪ Accept on Enter: ${acceptOnEnter}`)
+
     const logEnabled = defaultLog !== undefined ? interpretBoolean(defaultLog, true) : true
     console.log(`⚪ Write run log: ${logEnabled}`)
+
+    const useFilenameHint = interpretBoolean(defaultUseFilenameHint, true)
+    console.log(`⚪ Use filename hint: ${useFilenameHint}`)
+
+    const metadataHints = interpretBoolean(defaultMetadataHints, true)
+    console.log(`⚪ Use metadata hints: ${metadataHints}`)
+
+    const appendTags = interpretBoolean(defaultAppendTags, false)
+    console.log(`⚪ Append Finder tags: ${appendTags}`)
+
+    const pitchDeckOnly = interpretBoolean(defaultPitchDeckOnly, false)
+    console.log(`⚪ Startup pitch deck mode: ${pitchDeckOnly}`)
+
+    const companyFocus = interpretBoolean(defaultCompanyFocus, false)
+    const peopleFocus = interpretBoolean(defaultPeopleFocus, false)
+    const projectFocus = interpretBoolean(defaultProjectFocus, false)
+
+    const focusFlags = []
+    if (companyFocus) focusFlags.push('company')
+    if (peopleFocus) focusFlags.push('people')
+    if (projectFocus) focusFlags.push('project')
+
+    const focusPriority = ['project', 'company', 'people']
+    let promptFocus = 'balanced'
+    if (focusFlags.length === 1) {
+      promptFocus = focusFlags[0]
+    } else if (focusFlags.length > 1) {
+      for (const candidate of focusPriority) {
+        if (focusFlags.includes(candidate)) {
+          promptFocus = candidate
+          break
+        }
+      }
+      console.log(`⚪ Multiple prompt focus flags detected (${focusFlags.join(', ')}). Using ${promptFocus} focus.`)
+    }
+
+    if (focusFlags.length === 0) {
+      console.log('⚪ Prompt focus: balanced')
+    } else {
+      console.log(`⚪ Prompt focus: ${promptFocus}`)
+    }
+
 
     const deriveCommandLabel = () => {
       const argvSegments = process.argv.slice(1)
@@ -146,7 +202,17 @@ module.exports = async ({
       verbose,
       forceChange,
       logEnabled,
-      resolvedLogPath
+      resolvedLogPath,
+      useFilenameHint,
+      metadataHints,
+      appendTags,
+      pitchDeckOnly,
+      promptFocus,
+      acceptOnEnter,
+      companyFocus,
+      peopleFocus,
+      projectFocus
+
     }
 
     const logEntries = []
@@ -165,6 +231,15 @@ module.exports = async ({
     if (logEnabled) {
       try {
         await fs.mkdir(path.dirname(resolvedLogPath), { recursive: true })
+
+        const recoveryCommands = logEntries
+          .filter(entry => entry && entry.revertCommand)
+          .map(entry => entry.revertCommand)
+        const recoveryCommandsRelative = logEntries
+          .filter(entry => entry && entry.revertCommandRelative)
+          .map(entry => entry.revertCommandRelative)
+
+
         const logPayload = {
           generatedAt: new Date().toISOString(),
           command: process.argv,
@@ -181,9 +256,31 @@ module.exports = async ({
             customPrompt,
             convertBinary,
             verbose,
-            forceChange
+            forceChange,
+            acceptOnEnter,
+            useFilenameHint,
+            metadataHints,
+            appendTags,
+            pitchDeckOnly,
+            promptFocus,
+            companyFocus,
+            peopleFocus,
+            projectFocus
           },
-          renames: logEntries
+          renames: logEntries,
+          recovery: {
+            commands: recoveryCommands,
+            relativeCommands: recoveryCommandsRelative
+          }
+        }
+
+        if (recoveryCommands.length > 0) {
+          logPayload.recovery.script = [
+            '#!/bin/sh',
+            'set -e',
+            ...recoveryCommands
+          ].join('\n')
+
         }
 
         await fs.writeFile(resolvedLogPath, JSON.stringify(logPayload, null, 2))

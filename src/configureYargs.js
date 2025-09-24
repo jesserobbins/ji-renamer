@@ -29,7 +29,17 @@ const loadConfig = async () => {
       defaultVerbose: normalizeBoolean(parsed.defaultVerbose, false),
       defaultForceChange: normalizeBoolean(parsed.defaultForceChange, false),
       defaultLog: normalizeBoolean(parsed.defaultLog),
-      defaultIncludeSubdirectories: normalizeBoolean(parsed.defaultIncludeSubdirectories, false)
+
+      defaultIncludeSubdirectories: normalizeBoolean(parsed.defaultIncludeSubdirectories, false),
+      defaultUseFilenameHint: normalizeBoolean(parsed.defaultUseFilenameHint, true),
+      defaultMetadataHints: normalizeBoolean(parsed.defaultMetadataHints, true),
+      defaultAppendTags: normalizeBoolean(parsed.defaultAppendTags, false),
+      defaultPitchDeckOnly: normalizeBoolean(parsed.defaultPitchDeckOnly, false),
+      defaultCompanyFocus: normalizeBoolean(parsed.defaultCompanyFocus, false),
+      defaultPeopleFocus: normalizeBoolean(parsed.defaultPeopleFocus, false),
+      defaultProjectFocus: normalizeBoolean(parsed.defaultProjectFocus, false),
+      defaultAcceptOnEnter: normalizeBoolean(parsed.defaultAcceptOnEnter, false)
+
     }
   } catch (err) {
     return {}
@@ -105,6 +115,70 @@ module.exports = async () => {
       type: 'boolean',
       description: 'Convert legacy binary Microsoft Office documents before parsing',
       default: config.defaultConvertBinary || false
+
+    })
+    .option('verbose', {
+      alias: 'V',
+      type: 'boolean',
+      description: 'Enable verbose logging',
+      default: config.defaultVerbose || false
+    })
+    .option('force-change', {
+      alias: 'F',
+      type: 'boolean',
+      description: 'Apply suggested filenames without prompting for confirmation',
+      default: config.defaultForceChange || false
+    })
+    .option('log-path', {
+      type: 'string',
+      description: 'Path to write the run log (defaults to command name plus timestamp)',
+      default: config.defaultLogPath
+    })
+    .option('log', {
+      type: 'boolean',
+      description: 'Write a run log detailing all accepted renames',
+      default: config.defaultLog !== undefined ? config.defaultLog : true
+    })
+    .option('use-filename-hint', {
+      type: 'boolean',
+      description: 'Include the current filename in the prompt for additional context',
+      default: config.defaultUseFilenameHint !== undefined ? config.defaultUseFilenameHint : true
+    })
+    .option('metadata-hints', {
+      type: 'boolean',
+      description: 'Provide file metadata (dates, size) to the model when available',
+      default: config.defaultMetadataHints !== undefined ? config.defaultMetadataHints : true
+    })
+    .option('append-tags', {
+      type: 'boolean',
+      description: 'Append macOS Finder tags to the generated filename before the date segment',
+      default: config.defaultAppendTags || false
+    })
+    .option('pitch-deck-only', {
+      type: 'boolean',
+      description: 'Only rename PDFs detected as startup pitch decks using the dedicated filename template',
+      default: config.defaultPitchDeckOnly || false
+    })
+    .option('company-focus', {
+      type: 'boolean',
+      description: 'Bias the prompt to identify the company or organization first when building filenames',
+      default: config.defaultCompanyFocus || false
+    })
+    .option('people-focus', {
+      type: 'boolean',
+      description: 'Bias the prompt to identify people, teams, or committees first when building filenames',
+      default: config.defaultPeopleFocus || false
+    })
+    .option('project-focus', {
+      type: 'boolean',
+      description: 'Bias the prompt to identify projects or initiatives first when building filenames',
+      default: config.defaultProjectFocus || false
+    })
+    .option('accept-default', {
+      type: 'boolean',
+      description: 'Treat an empty confirmation response as acceptance instead of rejection',
+      default: config.defaultAcceptOnEnter || false
+
     }).argv
 
   if (argv.help) {
@@ -170,6 +244,7 @@ module.exports = async () => {
     config.defaultConvertBinary = argv.convertbinary
     await saveConfig({ config })
   }
+
   const verboseProvided = process.argv.some((arg) => {
     return arg === '--verbose' || arg === '--no-verbose' || arg === '-V' || arg.startsWith('--verbose=') || arg.startsWith('--no-verbose=')
   })
@@ -201,5 +276,87 @@ module.exports = async () => {
     config.defaultLog = argv.log
     await saveConfig({ config })
   }
+
+
+  const filenameHintProvided = process.argv.some((arg) => {
+    return arg === '--use-filename-hint' ||
+      arg === '--no-use-filename-hint' ||
+      arg.startsWith('--use-filename-hint=') ||
+      arg.startsWith('--no-use-filename-hint=')
+  })
+
+  if (filenameHintProvided) {
+    config.defaultUseFilenameHint = argv['use-filename-hint']
+    await saveConfig({ config })
+  }
+
+  const metadataHintsProvided = process.argv.some((arg) => {
+    return arg === '--metadata-hints' ||
+      arg === '--no-metadata-hints' ||
+      arg.startsWith('--metadata-hints=') ||
+      arg.startsWith('--no-metadata-hints=')
+  })
+
+  if (metadataHintsProvided) {
+    config.defaultMetadataHints = argv['metadata-hints']
+    await saveConfig({ config })
+  }
+
+  const appendTagsProvided = process.argv.some((arg) => {
+    return arg === '--append-tags' || arg === '--no-append-tags' || arg.startsWith('--append-tags=') || arg.startsWith('--no-append-tags=')
+  })
+
+  if (appendTagsProvided) {
+    config.defaultAppendTags = argv['append-tags']
+    await saveConfig({ config })
+  }
+
+  const pitchDeckProvided = process.argv.some((arg) => {
+    return arg === '--pitch-deck-only' || arg === '--no-pitch-deck-only' ||
+      arg.startsWith('--pitch-deck-only=') || arg.startsWith('--no-pitch-deck-only=')
+  })
+
+  if (pitchDeckProvided) {
+    config.defaultPitchDeckOnly = argv['pitch-deck-only']
+    await saveConfig({ config })
+  }
+
+  const companyFocusProvided = process.argv.some((arg) => {
+    return arg === '--company-focus' || arg === '--no-company-focus' || arg.startsWith('--company-focus=') || arg.startsWith('--no-company-focus=')
+  })
+
+  if (companyFocusProvided) {
+    config.defaultCompanyFocus = argv['company-focus']
+    await saveConfig({ config })
+  }
+
+  const peopleFocusProvided = process.argv.some((arg) => {
+    return arg === '--people-focus' || arg === '--no-people-focus' || arg.startsWith('--people-focus=') || arg.startsWith('--no-people-focus=')
+  })
+
+  if (peopleFocusProvided) {
+    config.defaultPeopleFocus = argv['people-focus']
+    await saveConfig({ config })
+  }
+
+  const projectFocusProvided = process.argv.some((arg) => {
+    return arg === '--project-focus' || arg === '--no-project-focus' || arg.startsWith('--project-focus=') || arg.startsWith('--no-project-focus=')
+  })
+
+  if (projectFocusProvided) {
+    config.defaultProjectFocus = argv['project-focus']
+    await saveConfig({ config })
+  }
+
+  const acceptDefaultProvided = process.argv.some((arg) => {
+    return arg === '--accept-default' || arg === '--no-accept-default' || arg.startsWith('--accept-default=') || arg.startsWith('--no-accept-default=')
+  })
+
+  if (acceptDefaultProvided) {
+    config.defaultAcceptOnEnter = argv['accept-default']
+    await saveConfig({ config })
+  }
+
+
   return { argv, config }
 }
