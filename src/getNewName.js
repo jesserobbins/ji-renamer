@@ -706,6 +706,16 @@ const deriveSubjectMetadata = ({
         continue
       }
 
+      if (
+        optionHasHint &&
+        normalizedKey &&
+        option.normalizedKey &&
+        normalizedKey !== option.normalizedKey &&
+        !optionAppearsInFilename
+      ) {
+        continue
+      }
+
       const previousSubject = subject
       const previousNormalized = normalizedKey
       const previousMatchedHint = matchedHint
