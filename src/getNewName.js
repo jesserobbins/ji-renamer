@@ -8,6 +8,11 @@
 
 const changeCase = require('./changeCase')
 const getModelResponse = require('./getModelResponse')
+const {
+  normalizeSubjectConfidence,
+  normalizeSubjectKey,
+  isLowConfidenceSubject
+} = require('./subjectUtils')
 
 const LABEL_REGEX = /^(?:filename|file name|suggested filename|suggested file name|name|title)\s*(?:is|=|:)?\s*/i
 const QUOTE_REGEX = /[`"'“”‘’]/g
@@ -338,7 +343,8 @@ const composePromptLines = ({
   customPrompt,
   promptFocus,
   pitchDeckMode,
-  pitchDeckDetection
+  pitchDeckDetection,
+  subjectHints
 }) => {
   const lines = []
 
@@ -368,9 +374,17 @@ const composePromptLines = ({
     `Case style: ${_case}`,
     `Maximum characters: ${chars}`,
     `Language: ${language}`,
-    'Return only the filename text.',
+    'Output exactly three lines:',
+    'Filename: <final name without extension>',
+    'Subject: <best subject label, reuse existing names when relevant>',
+    'Subject confidence: high | medium | low',
     ''
   )
+
+  if (Array.isArray(subjectHints) && subjectHints.length > 0) {
+    lines.push('', 'Existing subject directories you should prefer when they match:')
+    lines.push(...subjectHints.slice(0, 20).map(name => `- ${name}`))
+  }
 
   if (useFilenameHint && originalFileName) {
     lines.push('', `Current filename for context: ${originalFileName}`)
@@ -418,6 +432,136 @@ const composePromptLines = ({
   }
 
   return lines
+}
+
+const SUBJECT_LINE_REGEX = /^subject\s*(?:name)?\s*[:=]\s*(.+)$/i
+const SUBJECT_CONFIDENCE_REGEX = /^subject\s*confidence\s*[:=]\s*(.+)$/i
+
+const cleanSubjectCandidate = (value) => {
+  if (!value) return ''
+  return value
+    .replace(QUOTE_REGEX, '')
+    .replace(/^[\s:;,-]+/, '')
+    .replace(/[\s:;,-]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const formatSubjectFromFilename = (value) => {
+  if (!value) return ''
+  const spaced = String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!spaced) return ''
+  return spaced
+    .split(' ')
+    .map(word => (word ? word[0].toUpperCase() + word.slice(1) : ''))
+    .join(' ')
+    .trim()
+}
+
+const deriveSubjectMetadata = ({
+  modelResult,
+  candidate,
+  finalFilename,
+  usedFallback,
+  subjectHints
+}) => {
+  const hints = Array.isArray(subjectHints) ? subjectHints : []
+  const hintEntries = hints
+    .map(hint => ({ original: hint, key: normalizeSubjectKey(hint) }))
+    .filter(entry => entry.key)
+
+  let subject = null
+  let confidence = null
+  let source = null
+
+  if (modelResult) {
+    const lines = modelResult.replace(/\r/g, '\n').split('\n')
+    for (const rawLine of lines) {
+      const line = rawLine.trim()
+      if (!line) continue
+      if (!subject) {
+        const subjectMatch = line.match(SUBJECT_LINE_REGEX)
+        if (subjectMatch && subjectMatch[1]) {
+          const cleaned = cleanSubjectCandidate(subjectMatch[1])
+          if (cleaned) {
+            subject = cleaned
+            source = 'model'
+          }
+        }
+      }
+
+      if (!confidence) {
+        const confidenceMatch = line.match(SUBJECT_CONFIDENCE_REGEX)
+        if (confidenceMatch && confidenceMatch[1]) {
+          confidence = normalizeSubjectConfidence(confidenceMatch[1])
+        }
+      }
+    }
+  }
+
+  if (!subject) {
+    const candidateSubject = candidate && candidate.toLowerCase() !== 'renamed file'
+      ? cleanSubjectCandidate(candidate.split(' - ')[0])
+      : ''
+    if (candidateSubject) {
+      subject = candidateSubject
+      source = 'candidate'
+    }
+  }
+
+  if (!subject && finalFilename) {
+    const fromFilename = formatSubjectFromFilename(finalFilename)
+    if (fromFilename) {
+      subject = fromFilename
+      source = 'filename'
+    }
+  }
+
+  if (!subject) {
+    return {
+      subject: null,
+      normalizedKey: null,
+      confidence: confidence || 'unknown',
+      source: source || 'none',
+      matchedHint: null
+    }
+  }
+
+  const normalizedKey = normalizeSubjectKey(subject)
+
+  if (!confidence) {
+    if (source === 'model') {
+      confidence = usedFallback ? 'medium' : 'high'
+    } else if (source === 'candidate') {
+      confidence = usedFallback ? 'low' : 'medium'
+    } else {
+      confidence = usedFallback ? 'low' : 'medium'
+    }
+  }
+
+  let matchedHint = null
+  if (normalizedKey) {
+    const hintMatch = hintEntries.find(entry => entry.key === normalizedKey)
+    if (hintMatch) {
+      matchedHint = hintMatch.original
+    }
+  }
+
+  if (isLowConfidenceSubject({ subject, confidence })) {
+    confidence = 'low'
+  }
+
+  return {
+    subject,
+    normalizedKey,
+    confidence,
+    source,
+    matchedHint
+  }
 }
 
 /**
@@ -483,7 +627,8 @@ module.exports = async options => {
       customPrompt,
       promptFocus,
       pitchDeckMode,
-      pitchDeckDetection
+      pitchDeckDetection,
+      subjectHints: Array.isArray(options.subjectHints) ? options.subjectHints : []
     })
 
     let promptLines = assemblePrompt()
@@ -622,6 +767,14 @@ module.exports = async options => {
 
     if (!filename) return null
 
+    const subjectMetadata = deriveSubjectMetadata({
+      modelResult,
+      candidate,
+      finalFilename: filename,
+      usedFallback,
+      subjectHints: Array.isArray(options.subjectHints) ? options.subjectHints : []
+    })
+
     // Build a human-readable summary for the CLI and run log so operators can
     // understand how the name was produced.
     const summaryParts = []
@@ -694,6 +847,12 @@ module.exports = async options => {
       summaryParts.push('The composed prompt was trimmed to keep the total length within the context window.')
     }
 
+    if (subjectMetadata.subject) {
+      const confidenceLabel = subjectMetadata.confidence || 'unknown'
+      const hintDetail = subjectMetadata.matchedHint ? ` Matched existing hint "${subjectMetadata.matchedHint}".` : ''
+      summaryParts.push(`Inferred subject "${subjectMetadata.subject}" with ${confidenceLabel} confidence.${hintDetail}`)
+    }
+
 
     const summary = summaryParts.join(' ')
 
@@ -741,7 +900,12 @@ module.exports = async options => {
       promptFocus,
       pitchDeckMode: Boolean(pitchDeckMode),
       pitchDeckDetection,
-      pitchDeckSkip: false
+      pitchDeckSkip: false,
+      subject: subjectMetadata.subject,
+      subjectConfidence: subjectMetadata.confidence,
+      subjectSource: subjectMetadata.source,
+      subjectNormalized: subjectMetadata.normalizedKey,
+      subjectMatchedHint: subjectMetadata.matchedHint
     }
 
 
