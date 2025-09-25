@@ -47,6 +47,10 @@ module.exports = async ({
   runtimeFocusOverrides
 
 }) => {
+  let companyFocus = false
+  let peopleFocus = false
+  let projectFocus = false
+
   try {
     const provider = defaultProvider || 'ollama'
     console.log(`⚪ Provider: ${provider}`)
@@ -186,9 +190,9 @@ module.exports = async ({
     registerFocus({ key: 'project', runtimeValue: overrides.project, defaultValue: defaultProjectFocus })
 
     const focusFlags = focusSelections.map(selection => selection.type)
-    const companyFocus = focusSelections.some(selection => selection.type === 'company')
-    const peopleFocus = focusSelections.some(selection => selection.type === 'people')
-    const projectFocus = focusSelections.some(selection => selection.type === 'project')
+    companyFocus = focusSelections.some(selection => selection.type === 'company')
+    peopleFocus = focusSelections.some(selection => selection.type === 'people')
+    projectFocus = focusSelections.some(selection => selection.type === 'project')
 
     let promptFocus = 'balanced'
     if (focusSelections.length === 1) {
