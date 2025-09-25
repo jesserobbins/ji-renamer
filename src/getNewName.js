@@ -360,7 +360,7 @@ const appendFinderTags = ({ base, tags }) => {
 const getFocusGuidance = (focus) => {
   switch (focus) {
     case 'company':
-      return 'Lead with the company or organization responsible for the document before other elements.'
+      return 'Lead with the namne of the company that is the focus of the document before other elements.'
     case 'people':
       return 'Lead with the key people, teams, or committees mentioned before any other elements.'
     case 'project':
@@ -391,7 +391,7 @@ const describeFocusForSummary = (focus) => {
 const getSubjectLineGuidance = (focus) => {
   switch (focus) {
     case 'company':
-      return 'In the Subject line, output the company or organization name that anchors the document. Prefer existing subject folder names when they clearly match.'
+      return 'In the Subject line, output the company or organization name that anchors the document. Prefer existing subject folder names when they exactly match.'
     case 'people':
       return 'In the Subject line, output the key person, team, or committee most responsible for the document.'
     case 'project':
