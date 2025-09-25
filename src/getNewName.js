@@ -328,6 +328,19 @@ const describeFocusForSummary = (focus) => {
  * as an array of lines that we later join, which keeps the logic easy to read
  * and annotate.
  */
+const getSubjectLineGuidance = (focus) => {
+  switch (focus) {
+    case 'company':
+      return 'In the Subject line, output the company or organization name that anchors the document. Prefer existing subject folder names when they clearly match.'
+    case 'people':
+      return 'In the Subject line, output the key person, team, or committee most responsible for the document.'
+    case 'project':
+      return 'In the Subject line, output the project or initiative name most associated with the document.'
+    default:
+      return 'Choose the most helpful anchor entity for the Subject line (company, project, team, or person).'
+  }
+}
+
 const composePromptLines = ({
   _case,
   chars,
@@ -357,11 +370,13 @@ const composePromptLines = ({
       'If a segment is unknown, use a brief factual placeholder such as Unknown or Draft rather than inventing details.'
     )
     lines.push(getFocusGuidance(promptFocus))
+    lines.push(getSubjectLineGuidance(promptFocus))
   } else {
     lines.push(
       'You rename documents using descriptive structured filenames.',
       'Follow this order: [Primary subject] - [Purpose or title] - [Document type] - [Version identifier] - [Best available date in YYYY-MM-DD].',
       getFocusGuidance(promptFocus),
+      getSubjectLineGuidance(promptFocus),
       'Use real wording from the document or metadata and omit any segment that is not clearly supported.',
       'Include authentic revision numbers or version labels (e.g., v1, draft, executed) when they appear.',
       'Prefer ISO-style dates (YYYY-MM-DD). If only month or year is known, use the most precise available format.',
@@ -462,12 +477,21 @@ const formatSubjectFromFilename = (value) => {
     .trim()
 }
 
+const extractPrimarySubjectFromCandidate = (value) => {
+  if (!value) return null
+  const firstSegment = String(value).split(' - ')[0]
+  if (!firstSegment) return null
+  const cleaned = cleanSubjectCandidate(firstSegment)
+  return cleaned || null
+}
+
 const deriveSubjectMetadata = ({
   modelResult,
   candidate,
   finalFilename,
   usedFallback,
-  subjectHints
+  subjectHints,
+  promptFocus
 }) => {
   const hints = Array.isArray(subjectHints) ? subjectHints : []
   const hintEntries = hints
@@ -527,11 +551,12 @@ const deriveSubjectMetadata = ({
       normalizedKey: null,
       confidence: confidence || 'unknown',
       source: source || 'none',
-      matchedHint: null
+      matchedHint: null,
+      focusOverrideApplied: false
     }
   }
 
-  const normalizedKey = normalizeSubjectKey(subject)
+  let normalizedKey = normalizeSubjectKey(subject)
 
   if (!confidence) {
     if (source === 'model') {
@@ -551,6 +576,28 @@ const deriveSubjectMetadata = ({
     }
   }
 
+  let focusOverrideApplied = false
+
+  if (promptFocus === 'company') {
+    const primarySubject = extractPrimarySubjectFromCandidate(candidate)
+    if (primarySubject) {
+      const primaryKey = normalizeSubjectKey(primarySubject)
+      if (primaryKey && primaryKey !== normalizedKey) {
+        const hintMatch = hintEntries.find(entry => entry.key === primaryKey)
+        subject = hintMatch ? hintMatch.original : primarySubject
+        matchedHint = hintMatch ? hintMatch.original : matchedHint
+        normalizedKey = primaryKey
+        confidence = hintMatch
+          ? 'high'
+          : confidence && confidence !== 'unknown' && confidence !== 'low'
+            ? confidence
+            : 'medium'
+        source = 'company-focus override'
+        focusOverrideApplied = true
+      }
+    }
+  }
+
   if (isLowConfidenceSubject({ subject, confidence })) {
     confidence = 'low'
   }
@@ -560,7 +607,8 @@ const deriveSubjectMetadata = ({
     normalizedKey,
     confidence,
     source,
-    matchedHint
+    matchedHint,
+    focusOverrideApplied
   }
 }
 
@@ -772,7 +820,8 @@ module.exports = async options => {
       candidate,
       finalFilename: filename,
       usedFallback,
-      subjectHints: Array.isArray(options.subjectHints) ? options.subjectHints : []
+      subjectHints: Array.isArray(options.subjectHints) ? options.subjectHints : [],
+      promptFocus
     })
 
     // Build a human-readable summary for the CLI and run log so operators can
@@ -853,6 +902,10 @@ module.exports = async options => {
       summaryParts.push(`Inferred subject "${subjectMetadata.subject}" with ${confidenceLabel} confidence.${hintDetail}`)
     }
 
+    if (subjectMetadata.focusOverrideApplied) {
+      summaryParts.push('Company focus override replaced the model subject with the primary company name from the filename to direct folder organization.')
+    }
+
 
     const summary = summaryParts.join(' ')
 
@@ -905,7 +958,8 @@ module.exports = async options => {
       subjectConfidence: subjectMetadata.confidence,
       subjectSource: subjectMetadata.source,
       subjectNormalized: subjectMetadata.normalizedKey,
-      subjectMatchedHint: subjectMetadata.matchedHint
+      subjectMatchedHint: subjectMetadata.matchedHint,
+      subjectFocusOverrideApplied: Boolean(subjectMetadata.focusOverrideApplied)
     }
 
 
