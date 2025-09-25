@@ -275,9 +275,11 @@ const buildCompanySubjectFromTokens = (tokens) => {
 }
 
 const extractCompanySubjectFromFilename = ({ originalFileName }) => {
+
   if (!originalFileName) {
     return { subject: null, normalizedKey: null, matchedHint: null }
   }
+
 
   const tokens = tokenizeForCompanySubject(originalFileName)
   if (tokens.length === 0) {

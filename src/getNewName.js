@@ -360,7 +360,7 @@ const appendFinderTags = ({ base, tags }) => {
 const getFocusGuidance = (focus) => {
   switch (focus) {
     case 'company':
-      return 'Lead with the company or organization responsible for the document before other elements.'
+      return 'Lead with the namne of the company that is the focus of the document before other elements.'
     case 'people':
       return 'Lead with the key people, teams, or committees mentioned before any other elements.'
     case 'project':
