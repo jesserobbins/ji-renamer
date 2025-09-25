@@ -186,6 +186,10 @@ module.exports = async ({
     registerFocus({ key: 'project', runtimeValue: overrides.project, defaultValue: defaultProjectFocus })
 
     const focusFlags = focusSelections.map(selection => selection.type)
+    const companyFocus = focusSelections.some(selection => selection.type === 'company')
+    const peopleFocus = focusSelections.some(selection => selection.type === 'people')
+    const projectFocus = focusSelections.some(selection => selection.type === 'project')
+
     let promptFocus = 'balanced'
     if (focusSelections.length === 1) {
       promptFocus = focusSelections[0].type
