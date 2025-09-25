@@ -274,26 +274,12 @@ const buildCompanySubjectFromTokens = (tokens) => {
     .trim()
 }
 
-const extractCompanySubjectFromFilename = ({ originalFileName, subjectHints = [] }) => {
+const extractCompanySubjectFromFilename = ({ originalFileName }) => {
+
   if (!originalFileName) {
     return { subject: null, normalizedKey: null, matchedHint: null }
   }
 
-  const hintEntries = subjectHints
-    .map(hint => ({ original: hint, key: normalizeSubjectKey(hint) }))
-    .filter(entry => entry.key)
-
-  const filenameKey = normalizeSubjectKey(originalFileName)
-  if (filenameKey && hintEntries.length > 0) {
-    const embeddedHint = hintEntries.find(entry => filenameKey.includes(entry.key))
-    if (embeddedHint) {
-      return {
-        subject: embeddedHint.original,
-        normalizedKey: embeddedHint.key,
-        matchedHint: embeddedHint.original
-      }
-    }
-  }
 
   const tokens = tokenizeForCompanySubject(originalFileName)
   if (tokens.length === 0) {
@@ -306,30 +292,6 @@ const extractCompanySubjectFromFilename = ({ originalFileName, subjectHints = []
   }
 
   const normalizedKey = normalizeSubjectKey(candidate)
-
-  if (normalizedKey && hintEntries.length > 0) {
-    const directMatch = hintEntries.find(entry => entry.key === normalizedKey)
-    if (directMatch) {
-      return {
-        subject: directMatch.original,
-        normalizedKey: directMatch.key,
-        matchedHint: directMatch.original
-      }
-    }
-
-    const looseMatch = hintEntries.find(entry => {
-      return normalizedKey.startsWith(entry.key) || entry.key.startsWith(normalizedKey)
-    })
-
-    if (looseMatch) {
-      return {
-        subject: looseMatch.original,
-        normalizedKey: looseMatch.key,
-        matchedHint: looseMatch.original
-      }
-    }
-  }
-
   return { subject: candidate, normalizedKey, matchedHint: null }
 }
 

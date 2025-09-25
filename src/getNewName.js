@@ -391,7 +391,7 @@ const describeFocusForSummary = (focus) => {
 const getSubjectLineGuidance = (focus) => {
   switch (focus) {
     case 'company':
-      return 'In the Subject line, output the company or organization name that anchors the document. Prefer existing subject folder names when they exactly match.'
+      return 'In the Subject line, output the company or organization name that anchors the document. Prefer existing subject folder names when they clearly match.'
     case 'people':
       return 'In the Subject line, output the key person, team, or committee most responsible for the document.'
     case 'project':
@@ -651,8 +651,7 @@ const deriveSubjectMetadata = ({
       : false
 
     const companyFromFilename = extractCompanySubjectFromFilename({
-      originalFileName,
-      subjectHints: hints
+      originalFileName
     })
 
     const preferredCandidates = []
@@ -661,7 +660,7 @@ const deriveSubjectMetadata = ({
         subject: companyFromFilename.subject,
         normalizedKey: companyFromFilename.normalizedKey || normalizeSubjectKey(companyFromFilename.subject),
         matchedHint: companyFromFilename.matchedHint,
-        source: companyFromFilename.matchedHint ? 'existing subject hint' : 'company-focus filename override'
+        source: 'company-focus filename override'
       })
     }
 
@@ -720,7 +719,7 @@ const deriveSubjectMetadata = ({
       const previousNormalized = normalizedKey
       const previousMatchedHint = matchedHint
 
-      subject = option.matchedHint || option.subject
+      subject = option.subject
       normalizedKey = option.normalizedKey
       if (optionHasHint) {
         matchedHint = option.matchedHint
@@ -1046,7 +1045,7 @@ module.exports = async options => {
     }
 
     if (subjectMetadata.focusOverrideApplied) {
-      summaryParts.push('Company focus override replaced the model subject with a company-aligned folder name derived from the filename and subject hints to keep organization consistent.')
+      summaryParts.push('Company focus override replaced the model subject with a company-aligned folder name derived from the filename to keep organization consistent.')
     }
 
 
