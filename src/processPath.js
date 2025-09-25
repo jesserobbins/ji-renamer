@@ -43,7 +43,8 @@ module.exports = async ({
   defaultIgnoreExtensions,
   defaultOrganizeBySubject,
   defaultSubjectDestination,
-  defaultMoveUnknownSubjects
+  defaultMoveUnknownSubjects,
+  runtimeFocusOverrides
 
 }) => {
   try {
@@ -166,30 +167,45 @@ module.exports = async ({
     const pitchDeckOnly = interpretBoolean(defaultPitchDeckOnly, false)
     console.log(`⚪ Startup pitch deck mode: ${pitchDeckOnly}`)
 
-    const companyFocus = interpretBoolean(defaultCompanyFocus, false)
-    const peopleFocus = interpretBoolean(defaultPeopleFocus, false)
-    const projectFocus = interpretBoolean(defaultProjectFocus, false)
+    const focusPriority = ['company', 'project', 'people']
+    const focusSelections = []
+    const registerFocus = ({ key, runtimeValue, defaultValue }) => {
+      const source = runtimeValue !== undefined ? 'cli' : 'config'
+      const value = runtimeValue !== undefined
+        ? interpretBoolean(runtimeValue, false)
+        : interpretBoolean(defaultValue, false)
+      if (value) {
+        focusSelections.push({ type: key, source })
+      }
+    }
 
-    const focusFlags = []
-    if (companyFocus) focusFlags.push('company')
-    if (peopleFocus) focusFlags.push('people')
-    if (projectFocus) focusFlags.push('project')
+    const overrides = runtimeFocusOverrides || {}
 
-    const focusPriority = ['project', 'company', 'people']
+    registerFocus({ key: 'company', runtimeValue: overrides.company, defaultValue: defaultCompanyFocus })
+    registerFocus({ key: 'people', runtimeValue: overrides.people, defaultValue: defaultPeopleFocus })
+    registerFocus({ key: 'project', runtimeValue: overrides.project, defaultValue: defaultProjectFocus })
+
+    const focusFlags = focusSelections.map(selection => selection.type)
     let promptFocus = 'balanced'
-    if (focusFlags.length === 1) {
-      promptFocus = focusFlags[0]
-    } else if (focusFlags.length > 1) {
+    if (focusSelections.length === 1) {
+      promptFocus = focusSelections[0].type
+    } else if (focusSelections.length > 1) {
+      const cliSelections = focusSelections.filter(selection => selection.source === 'cli')
+      const selectionPool = cliSelections.length > 0 ? cliSelections : focusSelections
+
       for (const candidate of focusPriority) {
-        if (focusFlags.includes(candidate)) {
-          promptFocus = candidate
+        const match = selectionPool.find(selection => selection.type === candidate)
+        if (match) {
+          promptFocus = match.type
           break
         }
       }
-      console.log(`⚪ Multiple prompt focus flags detected (${focusFlags.join(', ')}). Using ${promptFocus} focus.`)
+
+      const origin = cliSelections.length > 0 ? 'preferred CLI override' : 'configured priority'
+      console.log(`⚪ Multiple prompt focus flags detected (${focusFlags.join(', ')}). Using ${promptFocus} focus (${origin}).`)
     }
 
-    if (focusFlags.length === 0) {
+    if (focusSelections.length === 0) {
       console.log('⚪ Prompt focus: balanced')
     } else {
       console.log(`⚪ Prompt focus: ${promptFocus}`)

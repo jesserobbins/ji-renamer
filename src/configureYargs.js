@@ -495,5 +495,11 @@ module.exports = async () => {
     await saveConfig({ config })
   }
 
+  config.runtimeFocusOverrides = {
+    company: companyFocusProvided ? argv['company-focus'] : undefined,
+    people: peopleFocusProvided ? argv['people-focus'] : undefined,
+    project: projectFocusProvided ? argv['project-focus'] : undefined
+  }
+
   return { argv, config }
 }
