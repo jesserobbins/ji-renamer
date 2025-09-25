@@ -457,7 +457,7 @@ const composePromptLines = ({
   )
 
   if (Array.isArray(subjectHints) && subjectHints.length > 0) {
-    lines.push('', 'Existing subject directories you should prefer when they match:')
+    lines.push('', 'Existing subject directories already on disk. Only reuse a directory when the filename or document details clearly refer to the same organization:')
     lines.push(...subjectHints.slice(0, 20).map(name => `- ${name}`))
   }
 
@@ -643,6 +643,12 @@ const deriveSubjectMetadata = ({
     const existingKeyHasNoise = subjectKeyHasDocumentTerms(normalizedKey)
     const primarySubject = extractPrimarySubjectFromCandidate(candidate)
     const primaryKey = primarySubject ? normalizeSubjectKey(primarySubject) : null
+    const normalizedFilenameKey = originalFileName
+      ? normalizeSubjectKey(originalFileName.replace(/\.[^.]+$/i, ''))
+      : null
+    const subjectAppearsInFilename = normalizedKey && normalizedFilenameKey
+      ? normalizedFilenameKey.includes(normalizedKey)
+      : false
 
     const companyFromFilename = extractCompanySubjectFromFilename({
       originalFileName,
@@ -676,10 +682,25 @@ const deriveSubjectMetadata = ({
 
       const matchesExisting = normalizedKey && normalizedKey === option.normalizedKey
       const optionHasHint = Boolean(option.matchedHint)
-      const shouldReplace = !matchesExisting && (
-        !normalizedKey ||
-        existingKeyHasNoise
-      )
+      if (matchesExisting) {
+        continue
+      }
+
+      const optionAppearsInFilename = option.normalizedKey && normalizedFilenameKey
+        ? normalizedFilenameKey.includes(option.normalizedKey)
+        : false
+
+      let shouldReplace = false
+
+      if (!normalizedKey) {
+        shouldReplace = true
+      } else if (existingKeyHasNoise) {
+        shouldReplace = true
+      } else if (!subjectAppearsInFilename && optionAppearsInFilename) {
+        shouldReplace = true
+      } else if (!subjectAppearsInFilename && !optionHasHint && option.normalizedKey && option.normalizedKey !== normalizedKey) {
+        shouldReplace = true
+      }
 
       if (!shouldReplace && !optionHasHint) {
         continue
