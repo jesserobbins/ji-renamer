@@ -11,7 +11,9 @@ const getModelResponse = require('./getModelResponse')
 const {
   normalizeSubjectConfidence,
   normalizeSubjectKey,
-  isLowConfidenceSubject
+  isLowConfidenceSubject,
+  extractCompanySubjectFromFilename,
+  subjectKeyHasDocumentTerms
 } = require('./subjectUtils')
 
 const LABEL_REGEX = /^(?:filename|file name|suggested filename|suggested file name|name|title)\s*(?:is|=|:)?\s*/i
@@ -137,6 +139,60 @@ const trimToBoundary = (text, limit) => {
   return text.slice(0, limit).replace(/[-_]+$/g, '')
 }
 
+const looksLikeDateTokens = (tokens) => {
+  if (!Array.isArray(tokens) || tokens.length !== 3) return false
+  const [year, month, day] = tokens
+  if (!/^\d{4}$/.test(year)) return false
+  if (!/^\d{2}$/.test(month)) return false
+  if (!/^\d{2}$/.test(day)) return false
+  return true
+}
+
+const preserveTrailingDate = (value, limit) => {
+  if (!value || !limit) return null
+
+  const attempt = (separator) => {
+    if (!value.includes(separator)) return null
+    const rawParts = value.split(separator)
+    const parts = rawParts.filter(part => part && part.length > 0)
+    if (parts.length < 3) return null
+    const dateTokens = parts.slice(-3)
+    if (!looksLikeDateTokens(dateTokens)) return null
+
+    const prefixTokens = parts.slice(0, -3)
+    const candidate = [...prefixTokens, ...dateTokens].join(separator)
+    if (candidate.length <= limit) {
+      return candidate
+    }
+
+    const preserved = []
+    for (const token of prefixTokens) {
+      const nextTokens = [...preserved, token, ...dateTokens]
+      const joined = nextTokens.join(separator)
+      if (joined.length <= limit) {
+        preserved.push(token)
+      } else {
+        break
+      }
+    }
+
+    const finalTokens = [...preserved, ...dateTokens]
+    const finalValue = finalTokens.join(separator)
+    if (finalValue.length <= limit) {
+      return finalValue
+    }
+
+    const dateOnly = dateTokens.join(separator)
+    if (dateOnly.length <= limit) {
+      return dateOnly
+    }
+
+    return null
+  }
+
+  return attempt('-') || attempt('_')
+}
+
 
 /**
  * Applies the configured character limit to the provided filename.  The helper
@@ -148,6 +204,10 @@ const enforceLengthLimit = (value, limit) => {
   if (!value) return value
   if (!Number.isFinite(limit) || limit <= 0) return value
   if (value.length <= limit) return value
+  const preservedDate = preserveTrailingDate(value, limit)
+  if (preservedDate) {
+    return preservedDate
+  }
   return trimToBoundary(value, limit) || value.slice(0, limit)
 }
 
@@ -491,7 +551,8 @@ const deriveSubjectMetadata = ({
   finalFilename,
   usedFallback,
   subjectHints,
-  promptFocus
+  promptFocus,
+  originalFileName
 }) => {
   const hints = Array.isArray(subjectHints) ? subjectHints : []
   const hintEntries = hints
@@ -579,22 +640,72 @@ const deriveSubjectMetadata = ({
   let focusOverrideApplied = false
 
   if (promptFocus === 'company') {
+    const existingKeyHasNoise = subjectKeyHasDocumentTerms(normalizedKey)
     const primarySubject = extractPrimarySubjectFromCandidate(candidate)
+    const primaryKey = primarySubject ? normalizeSubjectKey(primarySubject) : null
+
+    const companyFromFilename = extractCompanySubjectFromFilename({
+      originalFileName,
+      subjectHints: hints
+    })
+
+    const preferredCandidates = []
+    if (companyFromFilename.subject) {
+      preferredCandidates.push({
+        subject: companyFromFilename.subject,
+        normalizedKey: companyFromFilename.normalizedKey || normalizeSubjectKey(companyFromFilename.subject),
+        matchedHint: companyFromFilename.matchedHint,
+        source: companyFromFilename.matchedHint ? 'existing subject hint' : 'company-focus filename override'
+      })
+    }
+
     if (primarySubject) {
-      const primaryKey = normalizeSubjectKey(primarySubject)
-      if (primaryKey && primaryKey !== normalizedKey) {
-        const hintMatch = hintEntries.find(entry => entry.key === primaryKey)
-        subject = hintMatch ? hintMatch.original : primarySubject
-        matchedHint = hintMatch ? hintMatch.original : matchedHint
-        normalizedKey = primaryKey
-        confidence = hintMatch
-          ? 'high'
-          : confidence && confidence !== 'unknown' && confidence !== 'low'
-            ? confidence
-            : 'medium'
-        source = 'company-focus override'
+      preferredCandidates.push({
+        subject: primarySubject,
+        normalizedKey: primaryKey,
+        matchedHint: primaryKey
+          ? hintEntries.find(entry => entry.key === primaryKey)?.original || null
+          : null,
+        source: 'company-focus override'
+      })
+    }
+
+    for (const option of preferredCandidates) {
+      if (!option || !option.subject) continue
+      if (!option.normalizedKey) continue
+
+      const matchesExisting = normalizedKey && normalizedKey === option.normalizedKey
+      const optionHasHint = Boolean(option.matchedHint)
+      const shouldReplace = !matchesExisting && (
+        !normalizedKey ||
+        existingKeyHasNoise
+      )
+
+      if (!shouldReplace && !optionHasHint) {
+        continue
+      }
+
+      const previousSubject = subject
+      const previousNormalized = normalizedKey
+      const previousMatchedHint = matchedHint
+
+      subject = option.matchedHint || option.subject
+      normalizedKey = option.normalizedKey
+      if (optionHasHint) {
+        matchedHint = option.matchedHint
+        confidence = 'high'
+      } else if (!confidence || confidence === 'unknown' || confidence === 'low') {
+        confidence = 'medium'
+      }
+      source = option.source
+      if (
+        subject !== previousSubject ||
+        normalizedKey !== previousNormalized ||
+        matchedHint !== previousMatchedHint
+      ) {
         focusOverrideApplied = true
       }
+      break
     }
   }
 
@@ -821,7 +932,8 @@ module.exports = async options => {
       finalFilename: filename,
       usedFallback,
       subjectHints: Array.isArray(options.subjectHints) ? options.subjectHints : [],
-      promptFocus
+      promptFocus,
+      originalFileName
     })
 
     // Build a human-readable summary for the CLI and run log so operators can
@@ -903,7 +1015,7 @@ module.exports = async options => {
     }
 
     if (subjectMetadata.focusOverrideApplied) {
-      summaryParts.push('Company focus override replaced the model subject with the primary company name from the filename to direct folder organization.')
+      summaryParts.push('Company focus override replaced the model subject with a company-aligned folder name derived from the filename and subject hints to keep organization consistent.')
     }
 
 
