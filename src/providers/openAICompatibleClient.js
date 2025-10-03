@@ -1,7 +1,21 @@
 const { parseModelResponse } = require('../utils/parseModelResponse')
 
+function normalizeBaseUrl (rawBaseUrl, logger) {
+  const trimmed = (rawBaseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')
+
+  if (/\/v\d+(?:$|\/)/.test(trimmed)) {
+    return trimmed
+  }
+
+  if (logger && typeof logger.warn === 'function') {
+    logger.warn(`Base URL "${trimmed}" is missing an API version segment; defaulting to ${trimmed}/v1`)
+  }
+
+  return `${trimmed}/v1`
+}
+
 function createOpenAICompatibleClient (options, logger) {
-  const baseUrl = (options.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '')
+  const baseUrl = normalizeBaseUrl(options.baseUrl, logger)
   const endpoint = `${baseUrl}/chat/completions`
   const model = options.model || (options.provider === 'lm-studio' ? 'lmstudio-community/llava' : 'gpt-4o')
 

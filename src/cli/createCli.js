@@ -38,7 +38,7 @@ const CLI_OPTIONS = {
   },
   baseUrl: {
     alias: 'u',
-    describe: 'Base URL for the provider endpoint',
+    describe: 'Base URL for the provider endpoint (include /v1 for OpenAI-compatible APIs)',
     type: 'string'
   },
   model: {
@@ -128,7 +128,6 @@ function createCli (config = {}) {
     .example('$0 ~/Downloads/Pitches --dry-run --summary', 'Preview renames and print a summary report')
 
   const detectedWidth = typeof parser.terminalWidth === 'function' ? parser.terminalWidth() : undefined
-
   const stdoutWidth = process.stdout && Number.isFinite(process.stdout.columns) ? process.stdout.columns : undefined
   const stderrWidth = process.stderr && Number.isFinite(process.stderr.columns) ? process.stderr.columns : undefined
   const envWidth = Number.isFinite(Number(process.env.COLUMNS)) ? Number(process.env.COLUMNS) : undefined

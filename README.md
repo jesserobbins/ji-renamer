@@ -94,8 +94,11 @@ Explicitly set base URLs if your providers are exposed on non-default ports.
 
 ```bash
 npx ai-renamer /path --provider=ollama --base-url=http://127.0.0.1:11434
-npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234
+npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
 ```
+
+> **Note**
+> OpenAI-compatible servers (LM Studio, vLLM, etc.) expose their chat endpoints under `/v1/chat/completions`. The CLI will append `/v1` automatically if you omit it, but declaring it explicitly avoids extra warnings in the logs.
 
 ## Command Options
 All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:
@@ -108,8 +111,8 @@ Options:
                                 lm-studio)                              [string]
   -a, --api-key                 Set the API key if you're using openai as
                                 provider                                [string]
-  -u, --base-url                Set the API base URL (e.g.
-                                http://127.0.0.1:11434 for ollama)      [string]
+  -u, --base-url                Set the API base URL (include /v1 for
+                                OpenAI-compatible servers)               [string]
   -m, --model                   Set the model to use (e.g. gemma2, llama3,
                                 gpt-4o)                                 [string]
   -f, --frames                  Set the maximum number of frames to extract from
