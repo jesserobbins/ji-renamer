@@ -128,12 +128,14 @@ function createCli (config = {}) {
     .example('$0 ~/Downloads/Pitches --dry-run --summary', 'Preview renames and print a summary report')
 
   const detectedWidth = typeof parser.terminalWidth === 'function' ? parser.terminalWidth() : undefined
+
   const stdoutWidth = process.stdout && Number.isFinite(process.stdout.columns) ? process.stdout.columns : undefined
   const stderrWidth = process.stderr && Number.isFinite(process.stderr.columns) ? process.stderr.columns : undefined
   const envWidth = Number.isFinite(Number(process.env.COLUMNS)) ? Number(process.env.COLUMNS) : undefined
 
   const candidateWidths = [detectedWidth, stdoutWidth, stderrWidth, envWidth]
     .filter((value) => Number.isFinite(value) && value > 0)
+
 
   if (candidateWidths.length === 0) {
     // When yargs cannot determine the terminal width we disable wrapping completely.
@@ -143,6 +145,7 @@ function createCli (config = {}) {
     const wrapWidth = Math.max(...candidateWidths)
     parser.wrap(Math.min(120, Math.max(60, wrapWidth)))
   }
+
 
   const defaults = { ...defaultOptions, ...config }
 
