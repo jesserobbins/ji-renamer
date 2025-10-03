@@ -41,9 +41,17 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 # Install globally
 npm install -g ai-renamer
 
-# Or run without installing
+# Or run without installing the local workspace build
+npx --no-install ai-renamer-local /path/to/files
+
+# Or run the published package directly
 npx ai-renamer /path/to/files
 ```
+
+> **Why two commands?** The npm registry already hosts the published `ai-renamer` package. When you run `npx ai-renamer`, npm
+> will always prefer that published build—even inside this workspace. To exercise the local source without publishing a new
+> version, this repository ships an `ai-renamer-local` binary alias. Use `npx --no-install ai-renamer-local` (or `node src/index.js`)
+> to execute the code in your working tree.
 
 ## Quick Start
 ```bash
@@ -90,7 +98,7 @@ npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234
 ```
 
 ## Command Options
-All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx ai-renamer --help` for the full list:
+All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:
 
 ```text
 Options:
