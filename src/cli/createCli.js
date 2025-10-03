@@ -128,6 +128,7 @@ function createCli (config = {}) {
 
   const detectedWidth = typeof parser.terminalWidth === 'function' ? parser.terminalWidth() : undefined
   const wrapWidth = Number.isFinite(detectedWidth) && detectedWidth > 0 ? detectedWidth : 80
+
   parser.wrap(Math.min(120, wrapWidth))
 
   const defaults = { ...defaultOptions, ...config }
