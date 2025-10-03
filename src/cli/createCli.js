@@ -125,7 +125,9 @@ function createCli (config = {}) {
       type: 'string'
     })
     .example('$0 ~/Downloads/Pitches --dry-run --summary', 'Preview renames and print a summary report')
-    .wrap(null)
+
+  const wrapWidth = typeof parser.terminalWidth === 'function' ? parser.terminalWidth() : 80
+  parser.wrap(Math.min(120, wrapWidth))
 
   const defaults = { ...defaultOptions, ...config }
 
