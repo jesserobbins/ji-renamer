@@ -4,7 +4,8 @@
   "name": "ai-renamer",
   "main": "./src/index.js",
   "bin": {
-    "ai-renamer": "./src/index.js"
+    "ai-renamer": "./src/index.js",
+    "ai-renamer-local": "./src/index.js"
   },
   "description": "A Node.js CLI that uses Ollama and LM Studio models (Llava, Gemma, Llama etc.) to intelligently rename files by their contents",
   "author": {
