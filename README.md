@@ -20,6 +20,8 @@ A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's cont
 ## Overview
 `ai-renamer` is a cross-platform CLI for renaming files according to the information inside them. Point the command at a folder or a single file and the tool will extract context (text, OCR frames, metadata) before asking an LLM to craft a concise filename. Multiple providers are supported, including Ollama, LM Studio, and OpenAI.
 
+> **Attribution**: This project is a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer. The upstream repository contains the original implementation and ongoing development by the creator.
+
 The CLI stores your preferred switches (provider, model, case style, subject-organization behavior, etc.) in a local config file so recurring workflows stay one command away.
 
 ## Key Features
