@@ -20,6 +20,8 @@ A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's cont
 ## Overview
 `ai-renamer` is a cross-platform CLI for renaming files according to the information inside them. Point the command at a folder or a single file and the tool will extract context (text, OCR frames, metadata) before asking an LLM to craft a concise filename. Multiple providers are supported, including Ollama, LM Studio, and OpenAI.
 
+> **Attribution**: This project is a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer. The upstream repository contains the original implementation and ongoing development by the creator.
+
 The CLI stores your preferred switches (provider, model, case style, subject-organization behavior, etc.) in a local config file so recurring workflows stay one command away.
 
 ## Key Features
@@ -39,9 +41,17 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 # Install globally
 npm install -g ai-renamer
 
-# Or run without installing
+# Or run without installing the local workspace build
+npx --no-install ai-renamer-local /path/to/files
+
+# Or run the published package directly
 npx ai-renamer /path/to/files
 ```
+
+> **Why two commands?** The npm registry already hosts the published `ai-renamer` package. When you run `npx ai-renamer`, npm
+> will always prefer that published build—even inside this workspace. To exercise the local source without publishing a new
+> version, this repository ships an `ai-renamer-local` binary alias. Use `npx --no-install ai-renamer-local` (or `node src/index.js`)
+> to execute the code in your working tree.
 
 ## Quick Start
 ```bash
@@ -84,11 +94,14 @@ Explicitly set base URLs if your providers are exposed on non-default ports.
 
 ```bash
 npx ai-renamer /path --provider=ollama --base-url=http://127.0.0.1:11434
-npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234
+npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
 ```
 
+> **Note**
+> OpenAI-compatible servers (LM Studio, vLLM, etc.) expose their chat endpoints under `/v1/chat/completions`. The CLI will append `/v1` automatically if you omit it, but declaring it explicitly avoids extra warnings in the logs.
+
 ## Command Options
-All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx ai-renamer --help` for the full list:
+All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:
 
 ```text
 Options:
@@ -98,8 +111,8 @@ Options:
                                 lm-studio)                              [string]
   -a, --api-key                 Set the API key if you're using openai as
                                 provider                                [string]
-  -u, --base-url                Set the API base URL (e.g.
-                                http://127.0.0.1:11434 for ollama)      [string]
+  -u, --base-url                Set the API base URL (include /v1 for
+                                OpenAI-compatible servers)               [string]
   -m, --model                   Set the model to use (e.g. gemma2, llama3,
                                 gpt-4o)                                 [string]
   -f, --frames                  Set the maximum number of frames to extract from
