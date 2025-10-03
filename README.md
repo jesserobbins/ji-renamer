@@ -161,7 +161,7 @@ Prompts emphasise clean company names by stripping financing or investor descrip
 Feel free to contribute. Open a new [issue](https://github.com/ozgrozer/ai-renamer/issues) or start a [pull request](https://github.com/ozgrozer/ai-renamer/pulls).
 
 ## License
-MIT
+GPLv3
 
 ## Product Requirements Document
 ### 1. Purpose and Background
