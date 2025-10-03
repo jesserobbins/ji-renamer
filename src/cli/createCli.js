@@ -1,5 +1,6 @@
 const yargs = require('yargs/yargs')
 const { hideBin } = require('yargs/helpers')
+const process = require('process')
 
 const defaultOptions = {
   provider: 'ollama',
@@ -127,9 +128,17 @@ function createCli (config = {}) {
     .example('$0 ~/Downloads/Pitches --dry-run --summary', 'Preview renames and print a summary report')
 
   const detectedWidth = typeof parser.terminalWidth === 'function' ? parser.terminalWidth() : undefined
-  const wrapWidth = Number.isFinite(detectedWidth) && detectedWidth > 0 ? detectedWidth : 80
 
-  parser.wrap(Math.min(120, wrapWidth))
+  const stdoutWidth = process.stdout && Number.isFinite(process.stdout.columns) ? process.stdout.columns : undefined
+  const stderrWidth = process.stderr && Number.isFinite(process.stderr.columns) ? process.stderr.columns : undefined
+  const envWidth = Number.isFinite(Number(process.env.COLUMNS)) ? Number(process.env.COLUMNS) : undefined
+
+  const candidateWidths = [detectedWidth, stdoutWidth, stderrWidth, envWidth]
+    .filter((value) => Number.isFinite(value) && value > 0)
+
+  const wrapWidth = candidateWidths.length > 0 ? Math.max(...candidateWidths) : 120
+  parser.wrap(Math.min(120, Math.max(60, wrapWidth)))
+
 
   const defaults = { ...defaultOptions, ...config }
 
