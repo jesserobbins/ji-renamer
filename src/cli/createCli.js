@@ -135,6 +135,7 @@ function createCli (config = {}) {
   const candidateWidths = [detectedWidth, stdoutWidth, stderrWidth, envWidth]
     .filter((value) => Number.isFinite(value) && value > 0)
 
+
   if (candidateWidths.length === 0) {
     // When yargs cannot determine the terminal width we disable wrapping completely.
     // This ensures long descriptions (and their default values) never get truncated.
@@ -143,6 +144,7 @@ function createCli (config = {}) {
     const wrapWidth = Math.max(...candidateWidths)
     parser.wrap(Math.min(120, Math.max(60, wrapWidth)))
   }
+
 
   const defaults = { ...defaultOptions, ...config }
 
