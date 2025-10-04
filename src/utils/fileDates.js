@@ -65,55 +65,99 @@ function formatDateForFilename (date) {
   return `${year}-${month}-${day}`
 }
 
-function extractMetadataDates (metadata) {
+function extractMetadataDateEntries (metadata, pathSegments = []) {
   if (!metadata || typeof metadata !== 'object') {
     return []
   }
 
-  const candidates = []
+  const entries = []
+
+  if (Array.isArray(metadata)) {
+    metadata.forEach((value, index) => {
+      const nextPath = [...pathSegments, `[${index}]`]
+      if (value && typeof value === 'object') {
+        entries.push(...extractMetadataDateEntries(value, nextPath))
+      } else if (value) {
+        const parsed = normaliseDateInput(value)
+        entries.push({
+          source: nextPath.join('.'),
+          rawValue: value,
+          parsedValue: parsed
+        })
+      }
+    })
+    return entries
+  }
 
   for (const [key, value] of Object.entries(metadata)) {
     if (!value) continue
 
-    if (typeof value === 'object' && !Array.isArray(value)) {
-      candidates.push(...extractMetadataDates(value))
+    const nextPath = [...pathSegments, key]
+
+    if (typeof value === 'object' && value !== null) {
+      entries.push(...extractMetadataDateEntries(value, nextPath))
       continue
     }
 
     const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '')
     if (METADATA_DATE_KEYS.has(normalizedKey)) {
-      candidates.push(value)
+      const parsed = normaliseDateInput(value)
+      entries.push({
+        source: nextPath.join('.'),
+        rawValue: value,
+        parsedValue: parsed
+      })
     }
   }
 
-  return candidates
+  return entries
 }
 
-function getRelevantDate (content) {
+function getDateCandidates (content) {
   if (!content || typeof content !== 'object') {
-    return null
+    return []
   }
 
   const candidates = []
 
-  candidates.push(...extractMetadataDates(content.metadata))
+  const metadataDates = extractMetadataDateEntries(content.metadata)
+  if (metadataDates.length) {
+    candidates.push(...metadataDates.map((entry) => ({
+      source: `metadata.${entry.source}`.replace('.[', '['),
+      rawValue: entry.rawValue,
+      parsedValue: entry.parsedValue
+    })))
+  }
 
   if (content.createdAt) {
-    candidates.push(content.createdAt)
+    candidates.push({
+      source: 'file.createdAt',
+      rawValue: content.createdAt,
+      parsedValue: normaliseDateInput(content.createdAt)
+    })
   }
 
   if (content.modifiedAt) {
-    candidates.push(content.modifiedAt)
+    candidates.push({
+      source: 'file.modifiedAt',
+      rawValue: content.modifiedAt,
+      parsedValue: normaliseDateInput(content.modifiedAt)
+    })
   }
 
-  for (const candidate of candidates) {
-    const parsed = normaliseDateInput(candidate)
-    if (parsed) {
-      return formatDateForFilename(parsed)
+  const seen = new Set()
+
+  return candidates.filter((candidate) => {
+    const key = candidate.parsedValue ? candidate.parsedValue.toISOString() : String(candidate.rawValue)
+    if (seen.has(key)) {
+      return false
     }
-  }
-
-  return null
+    seen.add(key)
+    return true
+  }).map((candidate) => ({
+    ...candidate,
+    formattedValue: candidate.parsedValue ? formatDateForFilename(candidate.parsedValue) : null
+  }))
 }
 
 function parsePdfDate (value) {
@@ -161,7 +205,7 @@ function parsePdfDate (value) {
 }
 
 module.exports = {
-  getRelevantDate,
+  getDateCandidates,
   parsePdfDate,
   formatDateForFilename,
   normaliseDateInput

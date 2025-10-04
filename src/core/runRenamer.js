@@ -13,7 +13,6 @@ const { createSubjectManager } = require('./subjectManager')
 const { createSummary } = require('./summary')
 const { parseModelResponse } = require('../utils/parseModelResponse')
 const { createInstructionSet } = require('./instructionSet')
-const { getRelevantDate } = require('../utils/fileDates')
 
 function normaliseModelResult (rawResult) {
   if (!rawResult || typeof rawResult !== 'object') {
@@ -75,7 +74,6 @@ async function runRenamer (targetPath, options, logger) {
 
       logger.info(`Processing ${filePath}`)
       const content = await extractContent(filePath, options)
-      const relevantDate = options.appendDate ? getRelevantDate(content) : null
       const subjectHints = subjectManager ? subjectManager.getHints() : []
       const prompt = buildPrompt({ content, options, subjectHints, instructionSet })
       const modelResponse = await provider.generateFilename(prompt)
@@ -91,10 +89,7 @@ async function runRenamer (targetPath, options, logger) {
       const baseWithoutExt = filename.replace(/\.[^./]+$/, '')
       const formattedBase = applyCase(baseWithoutExt, options.case || 'kebabCase')
       const truncatedBase = options.chars ? truncateFilename(formattedBase, options.chars) : formattedBase
-      const baseWithDate = relevantDate
-        ? [truncatedBase, relevantDate].filter(Boolean).join('-')
-        : truncatedBase
-      const sanitizedName = sanitizeFilename(baseWithDate, extension)
+      const sanitizedName = sanitizeFilename(truncatedBase, extension)
 
       let destinationDirectory = path.dirname(filePath)
       let resolvedSubject = effectiveSubject
