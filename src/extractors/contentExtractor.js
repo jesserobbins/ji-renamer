@@ -11,11 +11,16 @@ async function extractContent (filePath, options) {
   const baseName = path.basename(filePath)
   const stats = await fs.stat(filePath)
 
+  const createdAt = stats.birthtime instanceof Date && !Number.isNaN(stats.birthtime.getTime())
+    ? stats.birthtime.toISOString()
+    : null
+
   const baseContext = {
     fileName: baseName,
     extension: getExtension(filePath),
     sizeBytes: stats.size,
-    modifiedAt: stats.mtime.toISOString()
+    modifiedAt: stats.mtime.toISOString(),
+    createdAt
   }
 
   if (category === 'text') {

@@ -23,7 +23,8 @@ const PERSISTED_KEYS = new Set([
   'organizeBySubject',
   'subjectDestination',
   'moveUnknownSubjects',
-  'jsonMode'
+  'jsonMode',
+  'appendDate'
 ])
 
 async function loadConfig () {

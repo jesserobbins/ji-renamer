@@ -135,6 +135,7 @@ Options:
                                 subject names                            [string]
       --dry-run                 Preview suggestions without renaming     [boolean]
       --summary                 Print a summary report after the run     [boolean]
+      --append-date             Append metadata/creation date to names   [boolean]
       --max-file-size           Skip files larger than the given size in MB
                                                                       [number]
       --only-extensions         Only process files with these extensions

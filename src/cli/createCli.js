@@ -23,7 +23,8 @@ const defaultOptions = {
   ignoreExtensions: '',
   organizeBySubject: false,
   subjectDestination: '',
-  moveUnknownSubjects: false
+  moveUnknownSubjects: false,
+  appendDate: false
 }
 
 const CLI_OPTIONS = {
@@ -115,6 +116,12 @@ const CLI_OPTIONS = {
   },
   moveUnknownSubjects: {
     describe: 'Move low-confidence subjects into an Unknown folder',
+    type: 'boolean'
+  },
+  appendDate: {
+    cliName: 'append-date',
+    defaultKey: 'appendDate',
+    describe: 'Append the most relevant date (metadata or creation) in YYYY-MM-DD format',
     type: 'boolean'
   },
   jsonMode: {

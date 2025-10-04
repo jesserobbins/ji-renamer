@@ -10,6 +10,9 @@ function buildPrompt ({ content, options, subjectHints, instructionSet }) {
   segments.push(`Extension: ${content.extension}`)
   segments.push(`Size: ${content.sizeBytes} bytes`)
   segments.push(`Modified: ${content.modifiedAt}`)
+  if (content.createdAt) {
+    segments.push(`Created: ${content.createdAt}`)
+  }
 
   if (content.metadata) {
     const metadataLines = Object.entries(content.metadata)
