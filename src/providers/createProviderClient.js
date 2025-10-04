@@ -7,7 +7,7 @@ function createProviderClient (options, logger) {
     return createOllamaClient(options, logger)
   }
   if (provider === 'lm-studio') {
-    return createOpenAICompatibleClient({ ...options, baseUrl: options.baseUrl || 'http://127.0.0.1:1234' }, logger)
+    return createOpenAICompatibleClient({ ...options, baseUrl: options.baseUrl || 'http://127.0.0.1:1234/v1' }, logger)
   }
   if (provider === 'openai') {
     if (!options.apiKey) {

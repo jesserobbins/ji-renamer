@@ -1,5 +1,6 @@
 const yargs = require('yargs/yargs')
 const { hideBin } = require('yargs/helpers')
+const process = require('process')
 
 const defaultOptions = {
   provider: 'ollama',
@@ -16,6 +17,7 @@ const defaultOptions = {
   subjectStopwords: '',
   dryRun: false,
   summary: false,
+  jsonMode: true,
   maxFileSize: 0,
   onlyExtensions: '',
   ignoreExtensions: '',
@@ -37,7 +39,7 @@ const CLI_OPTIONS = {
   },
   baseUrl: {
     alias: 'u',
-    describe: 'Base URL for the provider endpoint',
+    describe: 'Base URL for the provider endpoint (include /v1 for OpenAI-compatible APIs)',
     type: 'string'
   },
   model: {
@@ -114,6 +116,12 @@ const CLI_OPTIONS = {
   moveUnknownSubjects: {
     describe: 'Move low-confidence subjects into an Unknown folder',
     type: 'boolean'
+  },
+  jsonMode: {
+    cliName: 'json-mode',
+    defaultKey: 'jsonMode',
+    describe: 'Force providers to use JSON-mode responses (disable with --no-json-mode)',
+    type: 'boolean'
   }
 }
 
@@ -125,14 +133,31 @@ function createCli (config = {}) {
       type: 'string'
     })
     .example('$0 ~/Downloads/Pitches --dry-run --summary', 'Preview renames and print a summary report')
-    .wrap(null)
+
+  const detectedWidth = typeof parser.terminalWidth === 'function' ? parser.terminalWidth() : undefined
+  const stdoutWidth = process.stdout && Number.isFinite(process.stdout.columns) ? process.stdout.columns : undefined
+  const stderrWidth = process.stderr && Number.isFinite(process.stderr.columns) ? process.stderr.columns : undefined
+  const envWidth = Number.isFinite(Number(process.env.COLUMNS)) ? Number(process.env.COLUMNS) : undefined
+
+  const candidateWidths = [detectedWidth, stdoutWidth, stderrWidth, envWidth]
+    .filter((value) => Number.isFinite(value) && value > 0)
+
+  if (candidateWidths.length === 0) {
+    // When yargs cannot determine the terminal width we disable wrapping completely.
+    // This ensures long descriptions (and their default values) never get truncated.
+    parser.wrap(null)
+  } else {
+    const wrapWidth = Math.max(...candidateWidths)
+    parser.wrap(Math.min(120, Math.max(60, wrapWidth)))
+  }
 
   const defaults = { ...defaultOptions, ...config }
 
   Object.entries(CLI_OPTIONS).forEach(([name, option]) => {
-    parser.option(name, {
-      ...option,
-      default: defaults[name]
+    const { cliName = name, defaultKey = name, ...optionConfig } = option
+    parser.option(cliName, {
+      ...optionConfig,
+      default: defaults[defaultKey]
     })
   })
 
