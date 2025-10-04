@@ -1,5 +1,20 @@
+const { getDateCandidates } = require('../utils/fileDates')
+
 function buildDefaultSystemMessage (options) {
-  return `You are an analyst tasked with renaming downloaded diligence artifacts. Read the provided context and return a JSON object with the following shape:\n{\n  "filename": string,\n  "subject": string | null,\n  "subject_confidence": number (0-1),\n  "summary": string\n}.\n- The filename MUST be concise, descriptive, and avoid filesystem-invalid characters.\n- Prefer ${options.case || 'kebabCase'} case.\n- Honour the requested language: ${options.language || 'English'}.\n- Subjects represent the company, project, or person tied to the file. Use null if you are unsure.\n- subject_confidence should reflect how certain you are about the subject.`
+  const instructions = [
+    'You are an analyst tasked with renaming downloaded diligence artifacts. Read the provided context and return a JSON object with the following shape:\n{\n  "filename": string,\n  "subject": string | null,\n  "subject_confidence": number (0-1),\n  "summary": string\n}.',
+    '- The filename MUST be concise, descriptive, and avoid filesystem-invalid characters.',
+    `- Prefer ${options.case || 'kebabCase'} case.`,
+    `- Honour the requested language: ${options.language || 'English'}.`,
+    '- Subjects represent the company, project, or person tied to the file. Use null if you are unsure.',
+    '- subject_confidence should reflect how certain you are about the subject.'
+  ]
+
+  if (options.appendDate) {
+    instructions.push('- When date candidates are provided, append the most relevant date to the filename in YYYY-MM-DD format.')
+  }
+
+  return instructions.join('\n')
 }
 
 function buildPrompt ({ content, options, subjectHints, instructionSet }) {
@@ -10,6 +25,9 @@ function buildPrompt ({ content, options, subjectHints, instructionSet }) {
   segments.push(`Extension: ${content.extension}`)
   segments.push(`Size: ${content.sizeBytes} bytes`)
   segments.push(`Modified: ${content.modifiedAt}`)
+  if (content.createdAt) {
+    segments.push(`Created: ${content.createdAt}`)
+  }
 
   if (content.metadata) {
     const metadataLines = Object.entries(content.metadata)
@@ -18,6 +36,21 @@ function buildPrompt ({ content, options, subjectHints, instructionSet }) {
     if (metadataLines.length) {
       segments.push('Metadata:')
       segments.push(...metadataLines)
+    }
+  }
+
+  if (options.appendDate) {
+    const dateCandidates = getDateCandidates(content)
+    segments.push('Append-date mode is enabled. Include the most relevant date in the filename using YYYY-MM-DD format.')
+    if (dateCandidates.length) {
+      segments.push('Available date candidates:')
+      for (const candidate of dateCandidates) {
+        const raw = typeof candidate.rawValue === 'string' ? candidate.rawValue : JSON.stringify(candidate.rawValue)
+        const normalized = candidate.formattedValue ? ` (parsed: ${candidate.formattedValue})` : ''
+        segments.push(`${candidate.source}: ${raw}${normalized}`)
+      }
+    } else {
+      segments.push('No explicit date metadata detected; infer from content if possible.')
     }
   }
 
