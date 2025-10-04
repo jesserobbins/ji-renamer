@@ -17,6 +17,7 @@ const defaultOptions = {
   subjectStopwords: '',
   dryRun: false,
   summary: false,
+  jsonMode: true,
   maxFileSize: 0,
   onlyExtensions: '',
   ignoreExtensions: '',
@@ -115,6 +116,12 @@ const CLI_OPTIONS = {
   moveUnknownSubjects: {
     describe: 'Move low-confidence subjects into an Unknown folder',
     type: 'boolean'
+  },
+  jsonMode: {
+    cliName: 'json-mode',
+    defaultKey: 'jsonMode',
+    describe: 'Force providers to use JSON-mode responses (disable with --no-json-mode)',
+    type: 'boolean'
   }
 }
 
@@ -135,7 +142,6 @@ function createCli (config = {}) {
   const candidateWidths = [detectedWidth, stdoutWidth, stderrWidth, envWidth]
     .filter((value) => Number.isFinite(value) && value > 0)
 
-
   if (candidateWidths.length === 0) {
     // When yargs cannot determine the terminal width we disable wrapping completely.
     // This ensures long descriptions (and their default values) never get truncated.
@@ -145,13 +151,13 @@ function createCli (config = {}) {
     parser.wrap(Math.min(120, Math.max(60, wrapWidth)))
   }
 
-
   const defaults = { ...defaultOptions, ...config }
 
   Object.entries(CLI_OPTIONS).forEach(([name, option]) => {
-    parser.option(name, {
-      ...option,
-      default: defaults[name]
+    const { cliName = name, defaultKey = name, ...optionConfig } = option
+    parser.option(cliName, {
+      ...optionConfig,
+      default: defaults[defaultKey]
     })
   })
 

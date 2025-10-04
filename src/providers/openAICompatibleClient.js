@@ -18,6 +18,7 @@ function createOpenAICompatibleClient (options, logger) {
   const baseUrl = normalizeBaseUrl(options.baseUrl, logger)
   const endpoint = `${baseUrl}/chat/completions`
   const model = options.model || (options.provider === 'lm-studio' ? 'lmstudio-community/llava' : 'gpt-4o')
+  const useJsonMode = options.jsonMode !== false
 
   async function generateFilename (prompt) {
     const headers = {
@@ -42,7 +43,6 @@ function createOpenAICompatibleClient (options, logger) {
     const body = {
       model,
       temperature: 0.2,
-      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -53,6 +53,12 @@ function createOpenAICompatibleClient (options, logger) {
           content: userContent
         }
       ]
+    }
+
+    if (useJsonMode) {
+      body.response_format = { type: 'json_object' }
+    } else {
+      body.response_format = { type: 'text' }
     }
 
     const response = await fetch(endpoint, {
