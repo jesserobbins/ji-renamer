@@ -29,13 +29,16 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 - **Provider flexibility** – Works with local Ollama models, LM Studio, or OpenAI models by toggling flags.
 - **Case formatting** – Choose the case convention that best fits your filesystem (`camelCase`, `kebabCase`, `snakeCase`, etc.).
 - **Batch processing** – Walk directory trees, optionally including subdirectories, and rename as you go.
+- **macOS metadata aware** – On macOS the CLI harvests Spotlight metadata (authors, where from, tags, comments, etc.) to give the model richer hints.
 - **Safety controls** – Use `--dry-run` to preview results, enforce size or extension allowlists/denylists, and print a summary report of every decision.
+- **Traceable logging** – Every run emits a JSONL audit log (to the target directory by default) so you can review or roll back renames later.
 - **Subject organization** – Group files into startup- or project-specific folders, feed existing folder names back into prompts to keep naming consistent, and optionally quarantine uncertain matches in an `Unknown` folder.
 
 ## Installation
 ### Prerequisites
 - [Node.js](https://nodejs.org/) 18 or newer.
 - [`ffmpeg`](https://ffmpeg.org/) and `ffprobe` available on your `PATH` for video frame extraction.
+- [`tesseract`](https://tesseract-ocr.github.io/tessdoc/Installation.html) CLI available on your `PATH` to OCR image-only PDFs (Homebrew `brew install tesseract` on macOS).
 
 ```bash
 # Install globally
@@ -135,6 +138,11 @@ Options:
                                 subject names                            [string]
       --dry-run                 Preview suggestions without renaming     [boolean]
       --summary                 Print a summary report after the run     [boolean]
+      --append-date             Ask the model to append the most relevant
+                                metadata/creation date in the configured
+                                format and report it in the log          [boolean]
+      --date-format             Override the appended date format (e.g.
+                                YYYY-MM-DD, YYYYMMDD, YYYY-MM-DD_HHmm)    [string]
       --max-file-size           Skip files larger than the given size in MB
                                                                       [number]
       --only-extensions         Only process files with these extensions
@@ -146,6 +154,7 @@ Options:
                                                                       [string]
       --move-unknown-subjects   Send low-confidence matches to an Unknown
                                  folder                                 [boolean]
+      --log-file                Custom path for the JSONL operation log   [string]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```
@@ -166,6 +175,11 @@ sentenceCase: Two words
 snakeCase: two_words
 trainCase: Two-Words
 ```
+
+### Logging & Rollback
+Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ai-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, any notes returned by the model, the date that was appended, and the list of candidate dates the model evaluated.
+
+Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
 
 ## Subject Organization Workflow
 Enable `--organize-by-subject` to route accepted renames into folders named after their inferred company, project, or person. Before processing begins the CLI scans the destination directory, adds existing folder names to the prompt as hints, and keeps the list in memory to avoid duplicates during the run. Use `--subject-destination` to route the folders (and the generated log) to a different workspace, and add `--move-unknown-subjects` to quarantine low-confidence matches in an `Unknown` folder.
