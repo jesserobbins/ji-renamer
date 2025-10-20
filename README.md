@@ -103,7 +103,7 @@ npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
 > **Note**
 > OpenAI-compatible servers (LM Studio, vLLM, etc.) expose their chat endpoints under `/v1/chat/completions`. The CLI will append `/v1` automatically if you omit it, but declaring it explicitly avoids extra warnings in the logs.
 
-If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, disable JSON mode with `--no-json-mode` (or set `"jsonMode": false` in `~/ai-renamer.json`). The CLI will fall back to plain text responses while keeping the JSON parsing instructions in the prompt.
+If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, the CLI will automatically retry the request with plain text responses while keeping the JSON parsing instructions in the prompt. You can also disable JSON mode proactively with `--no-json-mode` (or set `"jsonMode": false` in `~/ai-renamer.json`).
 
 ## Command Options
 All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:

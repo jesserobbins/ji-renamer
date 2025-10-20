@@ -20,14 +20,7 @@ function createOpenAICompatibleClient (options, logger) {
   const model = options.model || (options.provider === 'lm-studio' ? 'lmstudio-community/llava' : 'gpt-4o')
   const useJsonMode = options.jsonMode !== false
 
-  async function generateFilename (prompt) {
-    const headers = {
-      'Content-Type': 'application/json'
-    }
-    if (options.apiKey) {
-      headers.Authorization = `Bearer ${options.apiKey}`
-    }
-
+  function buildBody (prompt, responseFormatType) {
     const userContent = [{ type: 'text', text: prompt.userMessage }]
     const images = prompt.images || []
     const frames = prompt.frames || []
@@ -55,11 +48,22 @@ function createOpenAICompatibleClient (options, logger) {
       ]
     }
 
-    if (useJsonMode) {
-      body.response_format = { type: 'json_object' }
-    } else {
-      body.response_format = { type: 'text' }
+    if (responseFormatType) {
+      body.response_format = { type: responseFormatType }
     }
+
+    return body
+  }
+
+  async function sendRequest (prompt, responseFormatType) {
+    const headers = {
+      'Content-Type': 'application/json'
+    }
+    if (options.apiKey) {
+      headers.Authorization = `Bearer ${options.apiKey}`
+    }
+
+    const body = buildBody(prompt, responseFormatType)
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -69,13 +73,35 @@ function createOpenAICompatibleClient (options, logger) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      throw new Error(`Provider request failed (${response.status}): ${errorText}`)
+      const message = errorText || `status ${response.status}`
+
+      throw new Error(`Provider request failed (${response.status}): ${message}`)
     }
 
     const data = await response.json()
     const message = data.choices?.[0]?.message?.content
     const parsed = parseModelResponse(message)
     return parsed
+  }
+
+  async function generateFilename (prompt) {
+    const prefersJson = Boolean(useJsonMode)
+    const initialFormat = prefersJson ? 'json_object' : 'text'
+
+    try {
+      return await sendRequest(prompt, initialFormat)
+    } catch (error) {
+      const canRetryAsText = prefersJson && initialFormat === 'json_object' && /'response_format.type' must be 'json_schema' or 'text'/.test(error.message)
+      if (!canRetryAsText) {
+        throw error
+      }
+
+      if (logger && typeof logger.warn === 'function') {
+        logger.warn('Provider rejected json_object response_format; retrying with plain text responses.')
+      }
+
+      return sendRequest(prompt, 'text')
+    }
   }
 
   return {
