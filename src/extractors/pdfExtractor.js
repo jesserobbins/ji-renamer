@@ -50,7 +50,7 @@ async function runTesseractOcr (filePath, languages, logger) {
 
     let tempDir
     try {
-      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-renamer-ocr-'))
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ji-renamer-ocr-'))
       const outputPrefix = path.join(tempDir, 'page')
       await execFileAsync('pdftoppm', ['-png', '-r', '300', filePath, outputPrefix], {
         encoding: 'utf8',

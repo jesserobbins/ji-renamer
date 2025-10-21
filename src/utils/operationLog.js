@@ -14,7 +14,7 @@ async function createOperationLog ({ rootDirectory, explicitPath, logger }) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
   const resolvedPath = explicitPath
     ? path.resolve(explicitPath)
-    : path.join(rootDirectory, `ai-renamer-log-${timestamp}.jsonl`)
+    : path.join(rootDirectory, `ji-renamer-log-${timestamp}.jsonl`)
 
   try {
     await fsPromises.mkdir(path.dirname(resolvedPath), { recursive: true })

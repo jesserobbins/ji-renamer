@@ -1,9 +1,9 @@
-# ai-renamer
+# ji-renamer
 
 A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's contents and generate a descriptive, case-formatted filename. The tool was built for power users who download large research batches—investors, analysts, creative teams—and need a trustworthy assistant to triage, rename, and optionally reorganize assets.
 
-[![npm](https://img.shields.io/npm/v/ai-renamer.svg?style=flat-square)](https://www.npmjs.com/package/ai-renamer)
-[![license](https://img.shields.io/npm/l/ai-renamer?style=flat-square)](https://github.com/ozgrozer/ai-renamer/blob/main/license)
+[![npm](https://img.shields.io/npm/v/ji-renamer.svg?style=flat-square)](https://www.npmjs.com/package/ji-renamer)
+[![license](https://img.shields.io/npm/l/ji-renamer?style=flat-square)](https://github.com/ji-renamer/ji-renamer/blob/main/license)
 
 ## Table of Contents
 - [Overview](#overview)
@@ -19,7 +19,7 @@ A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's cont
 - [Product Requirements Document](#product-requirements-document)
 
 ## Overview
-`ai-renamer` is a cross-platform CLI for renaming files according to the information inside them. Point the command at a folder or a single file and the tool will extract context (text, OCR frames, metadata) before asking an LLM to craft a concise filename. Multiple providers are supported, including Ollama, LM Studio, and OpenAI.
+`ji-renamer` is a cross-platform CLI for renaming files according to the information inside them. Point the command at a folder or a single file and the tool will extract context (text, OCR frames, metadata) before asking an LLM to craft a concise filename. Multiple providers are supported, including Ollama, LM Studio, and OpenAI.
 
 > **Attribution**: This codebase began as a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer, but it has since been rewritten from the ground up and is actively maintained here. Please direct questions, issues, and contributions to this repository rather than the original project.
 
@@ -44,27 +44,27 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 
 ```bash
 # Install globally
-npm install -g ai-renamer
+npm install -g ji-renamer
 
 # Or run without installing the local workspace build
-npx --no-install ai-renamer-local /path/to/files
+npx --no-install ji-renamer-local /path/to-files
 
 # Or run the published package directly
-npx ai-renamer /path/to/files
+npx ji-renamer /path/to/files
 ```
 
-> **Why two commands?** The npm registry already hosts the published `ai-renamer` package. When you run `npx ai-renamer`, npm
+> **Why two commands?** The npm registry already hosts the published `ji-renamer` package. When you run `npx ji-renamer`, npm
 > will always prefer that published build—even inside this workspace. To exercise the local source without publishing a new
-> version, this repository ships an `ai-renamer-local` binary alias. Use `npx --no-install ai-renamer-local` (or `node src/index.js`)
+> version, this repository ships a `ji-renamer-local` binary alias. Use `npx --no-install ji-renamer-local` (or `node src/index.js`)
 > to execute the code in your working tree.
 
 ## Quick Start
 ```bash
 # Rename the files inside a directory using your saved defaults
-ai-renamer ~/Downloads/Pitches
+ji-renamer ~/Downloads/Pitches
 
 # Preview the run, print a summary, and direct new subject folders to a workspace
-ai-renamer ~/Downloads/Pitches \
+ji-renamer ~/Downloads/Pitches \
   --dry-run \
   --summary \
   --organize-by-subject \
@@ -77,41 +77,41 @@ ai-renamer ~/Downloads/Pitches \
 Ollama is the default provider. The CLI will auto-select an available Llava model, but you can specify any local model.
 
 ```bash
-npx ai-renamer /path --provider=ollama --model=llava:13b
+npx ji-renamer /path --provider=ollama --model=llava:13b
 ```
 
 ### LM Studio
 Point the CLI at LM Studio to reuse the model currently loaded in the desktop app.
 
 ```bash
-npx ai-renamer /path --provider=lm-studio
+npx ji-renamer /path --provider=lm-studio
 ```
 
 ### OpenAI
 Set the provider to `openai` and supply an API key. The CLI defaults to `gpt-4o`, but you can request any other model.
 
 ```bash
-npx ai-renamer /path --provider=openai --api-key=OPENAI_API_KEY
+npx ji-renamer /path --provider=openai --api-key=OPENAI_API_KEY
 ```
 
 ### Custom Ports
 Explicitly set base URLs if your providers are exposed on non-default ports.
 
 ```bash
-npx ai-renamer /path --provider=ollama --base-url=http://127.0.0.1:11434
-npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
+npx ji-renamer /path --provider=ollama --base-url=http://127.0.0.1:11434
+npx ji-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
 ```
 
 > **Note**
 > OpenAI-compatible servers (LM Studio, vLLM, etc.) expose their chat endpoints under `/v1/chat/completions`. The CLI will append `/v1` automatically if you omit it, but declaring it explicitly avoids extra warnings in the logs.
 
-If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, the CLI will automatically retry the request with plain text responses while keeping the JSON parsing instructions in the prompt. You can also disable JSON mode proactively with `--no-json-mode` (or set `"jsonMode": false` in `~/ai-renamer.json`).
+If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, the CLI will automatically retry the request with plain text responses while keeping the JSON parsing instructions in the prompt. You can also disable JSON mode proactively with `--no-json-mode` (or set `"jsonMode": false` in `~/ji-renamer.json`).
 
 > **Prompt size control**
-> Smaller-context models can struggle with the detailed metadata that `ai-renamer` supplies. Use `--prompt-char-budget=8000` (or your preferred limit) to cap the prompt length, or set the value to `0` to disable trimming entirely. The CLI will automatically annotate the prompt when segments are truncated so you know what was omitted.
+> Smaller-context models can struggle with the detailed metadata that `ji-renamer` supplies. Use `--prompt-char-budget=8000` (or your preferred limit) to cap the prompt length, or set the value to `0` to disable trimming entirely. The CLI will automatically annotate the prompt when segments are truncated so you know what was omitted.
 
 ## Command Options
-All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:
+All CLI flags are persisted to `~/ji-renamer.json`, so you only need to configure them once. Run `npx --no-install ji-renamer-local --help` for the full list:
 
 ```text
 Options:
@@ -174,7 +174,7 @@ Options:
                                                                        [boolean]
 ```
 
-`ai-renamer` uses the [`change-case`](https://github.com/blakeembrey/change-case) library for case styling:
+`ji-renamer` uses the [`change-case`](https://github.com/blakeembrey/change-case) library for case styling:
 
 ```text
 camelCase: twoWords
@@ -192,7 +192,7 @@ trainCase: Two-Words
 ```
 
 ### Logging & Rollback
-Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ai-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated.
+Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ji-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated.
 
 Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
 
@@ -213,7 +213,7 @@ Use the formatting flags to structure filenames consistently while still letting
 For example:
 
 ```bash
-ai-renamer \
+ji-renamer \
   --subject-format='[${value}]' \
   --subject-brief-format='[${value}]' \
   --document-description-format='[${value}]' \
@@ -235,7 +235,7 @@ Feel free to contribute. Open a new [issue](../../issues/new/choose) or start a 
 
 ## Credits
 - Original concept and initial implementation by [Özgür Özer](https://github.com/ozgrozer).
-- Comprehensive rewrite, metadata pipeline, OCR handling, provider integrations, and ongoing maintenance by the current ai-renamer contributors.
+- Comprehensive rewrite, metadata pipeline, OCR handling, provider integrations, and ongoing maintenance by the current ji-renamer contributors.
 
 Please direct support requests, bug reports, and feature ideas to this repository. The upstream author is not responsible for this rewritten codebase.
 
