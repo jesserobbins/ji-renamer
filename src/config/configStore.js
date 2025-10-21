@@ -27,7 +27,11 @@ const PERSISTED_KEYS = new Set([
   'appendDate',
   'dateFormat',
   'logFile',
-  'promptCharBudget'
+  'promptCharBudget',
+  'subjectFormat',
+  'subjectBriefFormat',
+  'documentDescriptionFormat',
+  'segmentSeparator'
 ])
 
 async function loadConfig () {

@@ -27,7 +27,11 @@ const defaultOptions = {
   appendDate: false,
   dateFormat: 'YYYY-MM-DD',
   logFile: '',
-  promptCharBudget: 12000
+  promptCharBudget: 12000,
+  subjectFormat: '',
+  subjectBriefFormat: '',
+  documentDescriptionFormat: '',
+  segmentSeparator: '-'
 }
 
 const CLI_OPTIONS = {
@@ -144,6 +148,30 @@ const CLI_OPTIONS = {
     defaultKey: 'promptCharBudget',
     describe: 'Maximum number of characters to include in the prompt payload (set to 0 to disable trimming)',
     type: 'number'
+  },
+  subjectFormat: {
+    cliName: 'subject-format',
+    defaultKey: 'subjectFormat',
+    describe: 'Template for embedding the subject in the filename (use $' + '{value} as the placeholder)',
+    type: 'string'
+  },
+  subjectBriefFormat: {
+    cliName: 'subject-brief-format',
+    defaultKey: 'subjectBriefFormat',
+    describe: 'Template for a concise subject descriptor segment (use $' + '{value}; leave empty to disable)',
+    type: 'string'
+  },
+  documentDescriptionFormat: {
+    cliName: 'document-description-format',
+    defaultKey: 'documentDescriptionFormat',
+    describe: 'Template for inserting a document description segment (use $' + '{value}; leave empty to disable)',
+    type: 'string'
+  },
+  segmentSeparator: {
+    cliName: 'segment-separator',
+    defaultKey: 'segmentSeparator',
+    describe: 'Separator used between formatted filename segments (subject, descriptors, title, date)',
+    type: 'string'
   },
   jsonMode: {
     cliName: 'json-mode',

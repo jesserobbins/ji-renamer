@@ -16,6 +16,22 @@ const { createInstructionSet } = require('./instructionSet')
 const { getDateCandidates, buildDateFormatRegex } = require('../utils/fileDates')
 const { createOperationLog } = require('../utils/operationLog')
 
+function formatTemplateSegment (template, value, caseStyle) {
+  if (!template || typeof template !== 'string') return ''
+  if (!value || typeof value !== 'string') return ''
+
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+
+  const replacements = {
+    value: trimmed,
+    cased: applyCase(trimmed, caseStyle || 'kebabCase')
+  }
+
+  return template.replace(/\$\{(value|cased)\}/g, (_, key) => replacements[key] || '')
+    .trim()
+}
+
 function normaliseModelResult (rawResult) {
   if (!rawResult || typeof rawResult !== 'object') {
     throw new Error('Model response missing expected JSON object')
@@ -29,6 +45,8 @@ function normaliseModelResult (rawResult) {
   const subject = rawResult.subject ?? rawResult.topic ?? null
   const summary = rawResult.summary || rawResult.reason || ''
   const subjectConfidence = rawResult.subject_confidence ?? rawResult.subjectConfidence ?? null
+  const subjectBriefRaw = rawResult.subject_brief ?? rawResult.subjectBrief ?? null
+  const documentDescriptionRaw = rawResult.document_description ?? rawResult.documentDescription ?? null
   const appliedDateRaw = rawResult.applied_date ?? rawResult.appliedDate ?? null
 
   if (!filename) {
@@ -55,6 +73,8 @@ function normaliseModelResult (rawResult) {
     subject,
     summary,
     subjectConfidence: typeof subjectConfidence === 'number' ? subjectConfidence : null,
+    subjectBrief: typeof subjectBriefRaw === 'string' ? subjectBriefRaw.trim() || null : null,
+    documentDescription: typeof documentDescriptionRaw === 'string' ? documentDescriptionRaw.trim() || null : null,
     appliedDate
   }
 }
@@ -110,17 +130,37 @@ async function runRenamer (targetPath, options, logger) {
       const subjectHints = subjectManager ? subjectManager.getHints() : []
       const prompt = buildPrompt({ content, options, subjectHints, instructionSet, dateCandidates })
       const modelResponse = await provider.generateFilename(prompt)
-      const { filename, subject, summary: fileSummary, subjectConfidence, appliedDate } = normaliseModelResult(modelResponse)
+      const { filename, subject, summary: fileSummary, subjectConfidence, appliedDate, subjectBrief, documentDescription } = normaliseModelResult(modelResponse)
 
       const cleanedSubject = instructionSet?.sanitizeSubject ? instructionSet.sanitizeSubject(subject) : subject
       const effectiveSubject = cleanedSubject || null
       const effectiveConfidence = effectiveSubject ? subjectConfidence : 0
 
       const extension = getExtension(filePath).replace('.', '')
+      const caseStyle = options.case || 'kebabCase'
       const baseWithoutExt = filename.replace(/\.[^./]+$/, '')
-      const formattedBase = applyCase(baseWithoutExt, options.case || 'kebabCase')
-      const truncatedBase = options.chars ? truncateFilename(formattedBase, options.chars) : formattedBase
-      const sanitizedName = sanitizeFilename(truncatedBase, extension)
+      const formattedBase = baseWithoutExt ? applyCase(baseWithoutExt, caseStyle) : ''
+
+      const subjectTemplateValue = effectiveSubject || null
+      const formattedSubjectSegment = formatTemplateSegment(options.subjectFormat, subjectTemplateValue, caseStyle)
+      const formattedSubjectBriefSegment = formatTemplateSegment(options.subjectBriefFormat, subjectBrief, caseStyle)
+      const formattedDocumentDescriptionSegment = formatTemplateSegment(options.documentDescriptionFormat, documentDescription, caseStyle)
+
+      const separator = typeof options.segmentSeparator === 'string' ? options.segmentSeparator : '-'
+      const segments = [
+        formattedSubjectSegment,
+        formattedSubjectBriefSegment,
+        formattedDocumentDescriptionSegment,
+        formattedBase
+      ].filter(segment => segment && segment.length)
+
+      let combinedBase = segments.join(separator)
+      if (!combinedBase) {
+        combinedBase = formattedBase || baseWithoutExt || filename
+      }
+
+      const truncatedCombined = options.chars ? truncateFilename(combinedBase, options.chars) : combinedBase
+      const sanitizedName = sanitizeFilename(truncatedCombined, extension)
 
       let destinationDirectory = path.dirname(filePath)
       let resolvedSubject = effectiveSubject
@@ -178,7 +218,9 @@ async function runRenamer (targetPath, options, logger) {
           newName: destinationPath,
           subject: resolvedSubject,
           confidence: effectiveConfidence,
-          notes: fileSummary
+          notes: fileSummary,
+          subjectBrief,
+          documentDescription
         })
         operationLog.write({
           timestamp: new Date().toISOString(),
@@ -188,6 +230,8 @@ async function runRenamer (targetPath, options, logger) {
           subject: resolvedSubject,
           subjectConfidence: effectiveConfidence,
           summary: fileSummary,
+          subjectBrief,
+          documentDescription,
           date: appliedDateRecord,
           dateCandidates,
           moved: destinationDirectory !== path.dirname(filePath)
@@ -202,7 +246,9 @@ async function runRenamer (targetPath, options, logger) {
         newName: destinationPath,
         subject: resolvedSubject,
         confidence: effectiveConfidence,
-        notes: fileSummary
+        notes: fileSummary,
+        subjectBrief,
+        documentDescription
       })
       if (destinationDirectory !== path.dirname(filePath)) {
         summary.addMove({ file: destinationPath, destination: destinationDirectory, subject: resolvedSubject })
@@ -216,6 +262,8 @@ async function runRenamer (targetPath, options, logger) {
         subject: resolvedSubject,
         subjectConfidence: effectiveConfidence,
         summary: fileSummary,
+        subjectBrief,
+        documentDescription,
         date: appliedDateRecord,
         dateCandidates,
         moved: destinationDirectory !== path.dirname(filePath)

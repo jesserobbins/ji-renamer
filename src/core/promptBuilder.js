@@ -41,12 +41,14 @@ function enforcePromptBudget (segments, budget) {
 
 function buildDefaultSystemMessage (options) {
   const instructions = [
-    'You are an analyst tasked with renaming downloaded diligence artifacts. Read the provided context and return a JSON object with the following shape:\n{\n  "filename": string,\n  "subject": string | null,\n  "subject_confidence": number (0-1),\n  "summary": string\n}.',
+    'You are an analyst tasked with renaming downloaded diligence artifacts. Read the provided context and return a JSON object with the following shape:\n{\n  "filename": string,\n  "subject": string | null,\n  "subject_confidence": number (0-1),\n  "subject_brief": string | null,\n  "document_description": string | null,\n  "summary": string\n}.',
     '- The filename MUST be concise, descriptive, and avoid filesystem-invalid characters.',
     `- Prefer ${options.case || 'kebabCase'} case.`,
     `- Honour the requested language: ${options.language || 'English'}.`,
-    '- Subjects represent the company, project, or person tied to the file. Use null if you are unsure.',
-    '- subject_confidence should reflect how certain you are about the subject.'
+    '- Subjects represent the company, project, or person tied to the file. Treat the subject as a proper noun and use null if you are unsure.',
+    '- subject_confidence should reflect how certain you are about the subject.',
+    '- subject_brief should be a concise (≤5 word) noun phrase summarising the subject, or null if unavailable.',
+    '- document_description should capture the document type or purpose in a short, title-style phrase (e.g. "Series-A Pitch Deck").'
   ]
 
   if (options.appendDate) {

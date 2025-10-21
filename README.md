@@ -162,6 +162,14 @@ Options:
       --log-file                Custom path for the JSONL operation log   [string]
       --prompt-char-budget      Maximum characters to send to the model (0 disables trimming)
                                                                         [number]
+      --subject-format          Template for embedding the subject segment (use
+                                ${value} or ${cased}; empty disables)    [string]
+      --subject-brief-format    Template for a concise subject descriptor
+                                segment (use ${value}/${cased})          [string]
+      --document-description-format
+                                Template for a document description segment
+                                (use ${value}/${cased})                  [string]
+      --segment-separator       Separator between filename segments       [string]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```
@@ -184,7 +192,7 @@ trainCase: Two-Words
 ```
 
 ### Logging & Rollback
-Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ai-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, any notes returned by the model, the date that was appended, and the list of candidate dates the model evaluated.
+Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ai-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated.
 
 Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
 
@@ -194,6 +202,33 @@ Enable `--organize-by-subject` to route accepted renames into folders named afte
 Dry-run mode prints the proposed folder moves without touching the filesystem so you can vet the plan before committing. When renames are confirmed, the tool records the chosen subject, destination, and confidence in the run summary for later auditing.
 
 If you need to avoid specific tokens in inferred subjects, pass them via `--subject-stopwords`, or append bespoke instructions with `--instructions-file` to fine-tune the guidance the LLM receives.
+
+### Subject & description templates
+
+Use the formatting flags to structure filenames consistently while still letting the model infer useful metadata. Each template supports two placeholders:
+
+- `${value}` – the raw text returned by the model (for example the proper noun subject or the title-style description).
+- `${cased}` – the same text passed through the active `--case` formatter.
+
+For example:
+
+```bash
+ai-renamer \
+  --subject-format='[${value}]' \
+  --subject-brief-format='[${value}]' \
+  --document-description-format='[${value}]' \
+  --segment-separator='-' \
+  --append-date \
+  ~/Downloads
+```
+
+When the model identifies the subject as `Mistral`, a brief of `AI Lab`, and a document description of `Series-A Pitch Deck`, the resulting filename would resemble:
+
+```
+[Mistral]-[AI Lab]-[Series-A Pitch Deck]-2025-10-01.pdf
+```
+
+Subject folders created by `--organize-by-subject` continue to follow the subject name itself (for example `./Mistral`) so your workspace layout remains predictable.
 
 ## Contribution
 Feel free to contribute. Open a new [issue](../../issues/new/choose) or start a [pull request](../../compare) against this repository.
