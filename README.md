@@ -14,13 +14,14 @@ A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's cont
 - [Command Options](#command-options)
 - [Subject Organization Workflow](#subject-organization-workflow)
 - [Contribution](#contribution)
+- [Credits](#credits)
 - [License](#license)
 - [Product Requirements Document](#product-requirements-document)
 
 ## Overview
 `ai-renamer` is a cross-platform CLI for renaming files according to the information inside them. Point the command at a folder or a single file and the tool will extract context (text, OCR frames, metadata) before asking an LLM to craft a concise filename. Multiple providers are supported, including Ollama, LM Studio, and OpenAI.
 
-> **Attribution**: This project is a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer. The upstream repository contains the original implementation and ongoing development by the creator.
+> **Attribution**: This codebase began as a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer, but it has since been rewritten from the ground up and is actively maintained here. Please direct questions, issues, and contributions to this repository rather than the original project.
 
 The CLI stores your preferred switches (provider, model, case style, subject-organization behavior, etc.) in a local config file so recurring workflows stay one command away.
 
@@ -195,7 +196,13 @@ Dry-run mode prints the proposed folder moves without touching the filesystem so
 If you need to avoid specific tokens in inferred subjects, pass them via `--subject-stopwords`, or append bespoke instructions with `--instructions-file` to fine-tune the guidance the LLM receives.
 
 ## Contribution
-Feel free to contribute. Open a new [issue](https://github.com/ozgrozer/ai-renamer/issues) or start a [pull request](https://github.com/ozgrozer/ai-renamer/pulls).
+Feel free to contribute. Open a new [issue](../../issues/new/choose) or start a [pull request](../../compare) against this repository.
+
+## Credits
+- Original concept and initial implementation by [Özgür Özer](https://github.com/ozgrozer).
+- Comprehensive rewrite, metadata pipeline, OCR handling, provider integrations, and ongoing maintenance by the current ai-renamer contributors.
+
+Please direct support requests, bug reports, and feature ideas to this repository. The upstream author is not responsible for this rewritten codebase.
 
 ## License
 GPLv3
