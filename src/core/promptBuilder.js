@@ -1,5 +1,44 @@
 const { getDateCandidates } = require('../utils/fileDates')
 
+const DEFAULT_PROMPT_CHAR_BUDGET = 12000
+const MAX_METADATA_ENTRIES = 120
+const MAX_DATE_CANDIDATES = 60
+
+function enforcePromptBudget (segments, budget) {
+  if (!Number.isFinite(budget) || budget <= 0) {
+    return segments
+  }
+
+  const constrained = []
+  const separator = '\\n\\n'
+  let remaining = budget
+
+  for (const segment of segments) {
+    if (segment === undefined || segment === null) {
+      continue
+    }
+
+    const text = String(segment)
+    const separatorLength = constrained.length ? separator.length : 0
+
+    if (text.length + separatorLength <= remaining) {
+      constrained.push(text)
+      remaining -= text.length + separatorLength
+      continue
+    }
+
+    const available = remaining - separatorLength
+    if (available > 16) {
+      const truncated = `${text.slice(0, available - 1)}… [truncated due to size]`
+      constrained.push(truncated)
+    }
+    constrained.push('[Context truncated due to size]')
+    return constrained
+  }
+
+  return constrained
+}
+
 function buildDefaultSystemMessage (options) {
   const instructions = [
     'You are an analyst tasked with renaming downloaded diligence artifacts. Read the provided context and return a JSON object with the following shape:\n{\n  "filename": string,\n  "subject": string | null,\n  "subject_confidence": number (0-1),\n  "summary": string\n}.',
@@ -59,9 +98,14 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
     const metadataLines = flattenMetadata(content.metadata)
       .filter((entry) => entry.value !== undefined && entry.value !== null && entry.value !== '')
       .map((entry) => `${entry.key}: ${entry.value}`)
+
     if (metadataLines.length) {
+      const limitedMetadata = metadataLines.slice(0, MAX_METADATA_ENTRIES)
       segments.push('Metadata:')
-      segments.push(...metadataLines)
+      segments.push(...limitedMetadata)
+      if (metadataLines.length > limitedMetadata.length) {
+        segments.push(`[Additional metadata truncated to ${MAX_METADATA_ENTRIES} entries]`)
+      }
     }
   }
 
@@ -80,8 +124,9 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
     segments.push(`Append-date mode is enabled. Include the most relevant date in the filename using ${format} format.`)
     segments.push('Date selection priority reminder: 1) Document text/OCR dates 2) Original creation (metadata then filesystem) 3) Added/downloaded dates 4) Other candidates as a last resort.')
     if (resolvedCandidates.length) {
+      const limitedCandidates = resolvedCandidates.slice(0, MAX_DATE_CANDIDATES)
       segments.push('Available date candidates (highest priority first):')
-      for (const candidate of resolvedCandidates) {
+      for (const candidate of limitedCandidates) {
         const raw = typeof candidate.rawValue === 'string' ? candidate.rawValue : JSON.stringify(candidate.rawValue)
         const formatted = candidate.formattedValue ? `parsed=${candidate.formattedValue}` : 'parsed=unavailable'
         const detailParts = [`priority=${candidate.priority}`, `source=${candidate.source}`, formatted, `raw=${raw}`]
@@ -92,6 +137,9 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
           detailParts.push(`context=${candidate.context}`)
         }
         segments.push(detailParts.join(' | '))
+      }
+      if (resolvedCandidates.length > limitedCandidates.length) {
+        segments.push(`[Additional date candidates truncated to ${MAX_DATE_CANDIDATES}]`)
       }
     } else {
       segments.push('No explicit date metadata detected; infer from content if possible.')
@@ -139,7 +187,9 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
     segments.push(`Additional instructions: ${options.customPrompt}`)
   }
 
-  const userMessage = segments.join('\\n\\n')
+  const promptBudget = Number.isFinite(options.promptCharBudget) ? options.promptCharBudget : DEFAULT_PROMPT_CHAR_BUDGET
+  const constrainedSegments = enforcePromptBudget(segments, promptBudget)
+  const userMessage = constrainedSegments.join('\\n\\n')
 
   return {
     systemMessage,

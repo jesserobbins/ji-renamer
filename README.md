@@ -39,6 +39,7 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 - [Node.js](https://nodejs.org/) 18 or newer.
 - [`ffmpeg`](https://ffmpeg.org/) and `ffprobe` available on your `PATH` for video frame extraction.
 - [`tesseract`](https://tesseract-ocr.github.io/tessdoc/Installation.html) CLI available on your `PATH` to OCR image-only PDFs (Homebrew `brew install tesseract` on macOS).
+- [`pdftoppm`](https://poppler.freedesktop.org/) (part of the Poppler utilities) on your `PATH` so PDFs that only contain images can be rasterised before OCR (`brew install poppler` on macOS).
 
 ```bash
 # Install globally
@@ -105,6 +106,9 @@ npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
 
 If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, the CLI will automatically retry the request with plain text responses while keeping the JSON parsing instructions in the prompt. You can also disable JSON mode proactively with `--no-json-mode` (or set `"jsonMode": false` in `~/ai-renamer.json`).
 
+> **Prompt size control**
+> Smaller-context models can struggle with the detailed metadata that `ai-renamer` supplies. Use `--prompt-char-budget=8000` (or your preferred limit) to cap the prompt length, or set the value to `0` to disable trimming entirely. The CLI will automatically annotate the prompt when segments are truncated so you know what was omitted.
+
 ## Command Options
 All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:
 
@@ -155,6 +159,8 @@ Options:
       --move-unknown-subjects   Send low-confidence matches to an Unknown
                                  folder                                 [boolean]
       --log-file                Custom path for the JSONL operation log   [string]
+      --prompt-char-budget      Maximum characters to send to the model (0 disables trimming)
+                                                                        [number]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```

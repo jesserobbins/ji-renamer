@@ -26,7 +26,8 @@ const defaultOptions = {
   moveUnknownSubjects: false,
   appendDate: false,
   dateFormat: 'YYYY-MM-DD',
-  logFile: ''
+  logFile: '',
+  promptCharBudget: 12000
 }
 
 const CLI_OPTIONS = {
@@ -137,6 +138,12 @@ const CLI_OPTIONS = {
     defaultKey: 'logFile',
     describe: 'Optional path for the operation log file (defaults to the top-level directory)',
     type: 'string'
+  },
+  promptCharBudget: {
+    cliName: 'prompt-char-budget',
+    defaultKey: 'promptCharBudget',
+    describe: 'Maximum number of characters to include in the prompt payload (set to 0 to disable trimming)',
+    type: 'number'
   },
   jsonMode: {
     cliName: 'json-mode',
