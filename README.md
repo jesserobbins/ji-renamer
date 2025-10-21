@@ -171,6 +171,14 @@ Options:
                                 Template for a document description segment
                                 (use ${value}/${cased})                  [string]
       --segment-separator       Separator between filename segments       [string]
+      --pdf-page-limit          Limit PDF extraction to the first N pages (0 processes the entire file)
+                                                                        [number]
+      --pdf-large-file-threshold
+                                Automatically limit large PDFs once they exceed this size in MB (0 disables)
+                                                                        [number]
+      --pdf-large-file-page-limit
+                                Page count to process when the large-file guard triggers
+                                                                        [number]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```
@@ -198,6 +206,9 @@ Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audi
 Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
 
 When you need to diagnose performance or understand the processing pipeline, run the CLI with `--verbose`. Verbose mode upgrades the log level to `debug` and annotates every major step (filtering, content extraction, prompt construction, provider calls, filesystem operations, etc.) with intent descriptions and completion times so you can see exactly where time is spent.
+
+> **Large PDF handling**
+> Massive PDFs can take several minutes to parse. By default the CLI automatically limits extraction to the first 30 pages when a file exceeds 25 MB, logging the truncation in verbose mode and in the metadata provided to the model. Override this behavior with `--pdf-page-limit=<pages>` or fine-tune the guard via `--pdf-large-file-threshold` and `--pdf-large-file-page-limit` when you need deeper scans.
 
 ## Subject Organization Workflow
 Enable `--organize-by-subject` to route accepted renames into folders named after their inferred company, project, or person. Before processing begins the CLI scans the destination directory, adds existing folder names to the prompt as hints, and keeps the list in memory to avoid duplicates during the run. Use `--subject-destination` to route the folders (and the generated log) to a different workspace, and add `--move-unknown-subjects` to quarantine low-confidence matches in an `Unknown` folder.

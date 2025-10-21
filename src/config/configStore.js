@@ -32,7 +32,10 @@ const PERSISTED_KEYS = new Set([
   'subjectFormat',
   'subjectBriefFormat',
   'documentDescriptionFormat',
-  'segmentSeparator'
+  'segmentSeparator',
+  'pdfPageLimit',
+  'pdfLargeFileThreshold',
+  'pdfLargeFilePageLimit'
 ])
 
 async function loadConfig () {

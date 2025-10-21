@@ -40,7 +40,16 @@ async function extractContent (filePath, options, logger) {
   }
 
   if (category === 'pdf') {
-    const { text, metadata: pdfMetadata, ocr } = await extractPdf(filePath, { logger })
+    const pdfOptions = {
+      logger,
+      ocrLanguages: options.ocrLanguages,
+      pageLimit: options.pdfPageLimit,
+      largeFileThresholdBytes: Math.max(0, Number(options.pdfLargeFileThreshold || 0)) * 1024 * 1024,
+      largeFilePageLimit: options.pdfLargeFilePageLimit,
+      textCharBudget: options.promptCharBudget,
+      stats
+    }
+    const { text, metadata: pdfMetadata, ocr, extraction } = await extractPdf(filePath, pdfOptions)
     if (pdfMetadata && Object.keys(pdfMetadata).length) {
       metadata.document = pdfMetadata
     }
@@ -50,6 +59,9 @@ async function extractContent (filePath, options, logger) {
     }
     if (ocr) {
       payload.ocr = ocr
+    }
+    if (extraction) {
+      payload.pdfExtraction = extraction
     }
     return payload
   }

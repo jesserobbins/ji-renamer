@@ -33,7 +33,10 @@ const defaultOptions = {
   subjectFormat: '',
   subjectBriefFormat: '',
   documentDescriptionFormat: '',
-  segmentSeparator: '-'
+  segmentSeparator: '-',
+  pdfPageLimit: 0,
+  pdfLargeFileThreshold: 25,
+  pdfLargeFilePageLimit: 30
 }
 
 const CLI_OPTIONS = {
@@ -185,6 +188,24 @@ const CLI_OPTIONS = {
     defaultKey: 'segmentSeparator',
     describe: 'Separator used between formatted filename segments (subject, descriptors, title, date)',
     type: 'string'
+  },
+  pdfPageLimit: {
+    cliName: 'pdf-page-limit',
+    defaultKey: 'pdfPageLimit',
+    describe: 'Limit PDF text extraction to the first N pages (0 processes all pages)',
+    type: 'number'
+  },
+  pdfLargeFileThreshold: {
+    cliName: 'pdf-large-file-threshold',
+    defaultKey: 'pdfLargeFileThreshold',
+    describe: 'Automatically limit PDF extraction when files exceed this size in MB (0 disables auto-limiting)',
+    type: 'number'
+  },
+  pdfLargeFilePageLimit: {
+    cliName: 'pdf-large-file-page-limit',
+    defaultKey: 'pdfLargeFilePageLimit',
+    describe: 'Number of pages to process when auto-limiting large PDFs is triggered',
+    type: 'number'
   },
   jsonMode: {
     cliName: 'json-mode',

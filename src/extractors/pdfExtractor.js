@@ -138,25 +138,118 @@ function buildDocumentMetadata (data) {
   return meta
 }
 
-async function extractPdf (filePath, { logger, ocrLanguages } = {}) {
+async function extractPdf (filePath, {
+  logger,
+  ocrLanguages,
+  pageLimit,
+  largeFileThresholdBytes,
+  largeFilePageLimit,
+  textCharBudget,
+  stats
+} = {}) {
+  let fileStats = stats
+  if (!fileStats) {
+    try {
+      fileStats = await fs.stat(filePath)
+    } catch (error) {
+      fileStats = null
+    }
+  }
+
+  const sizeBytes = fileStats?.size
+  const explicitLimit = Number.isFinite(pageLimit) && pageLimit > 0 ? Math.floor(pageLimit) : 0
+  const thresholdBytes = Number.isFinite(largeFileThresholdBytes) && largeFileThresholdBytes > 0
+    ? Math.floor(largeFileThresholdBytes)
+    : 0
+  const autoLimit = Number.isFinite(largeFilePageLimit) && largeFilePageLimit > 0
+    ? Math.floor(largeFilePageLimit)
+    : 0
+
+  let appliedPageLimit = explicitLimit
+  let autoLimited = false
+  if (!appliedPageLimit && thresholdBytes && autoLimit && Number.isFinite(sizeBytes) && sizeBytes >= thresholdBytes) {
+    appliedPageLimit = autoLimit
+    autoLimited = true
+    if (logger) {
+      const sizeMb = (sizeBytes / (1024 * 1024)).toFixed(1)
+      logger.info(`Large PDF detected (${sizeMb} MB). Limiting text extraction to first ${appliedPageLimit} page(s). Override with --pdf-page-limit to change this behavior.`)
+    }
+  } else if (appliedPageLimit && logger) {
+    logger.debug(`Limiting PDF extraction to first ${appliedPageLimit} page(s) per --pdf-page-limit option.`)
+  }
+
+  const parseOptions = {}
+  if (appliedPageLimit) {
+    parseOptions.max = appliedPageLimit
+  }
+
   const buffer = await fs.readFile(filePath)
-  const data = await pdfParse(buffer)
-  let text = (data.text || '').trim()
+  const data = await pdfParse(buffer, parseOptions)
+
+  let rawText = (data.text || '').trim()
   const metadata = buildDocumentMetadata(data)
+  if (metadata && typeof metadata === 'object' && Number.isFinite(data.numrender)) {
+    metadata.pagesProcessed = data.numrender
+  }
+
   let ocr = null
 
-  if (!text) {
+  if (!rawText) {
     const ocrResult = await runTesseractOcr(filePath, ocrLanguages, logger)
     if (ocrResult) {
-      text = ocrResult.text
+      rawText = ocrResult.text
       ocr = ocrResult.metadata
     }
   }
 
+  let budget
+  if (Number.isFinite(textCharBudget)) {
+    budget = Math.max(0, Math.floor(textCharBudget))
+  } else {
+    budget = 20000
+  }
+
+  const truncatedByCharacters = budget > 0 && rawText.length > budget
+  const text = budget > 0 ? rawText.slice(0, budget) : rawText
+  if (truncatedByCharacters && logger) {
+    logger.debug(`Truncated PDF text to ${budget} characters to respect the prompt budget.`)
+  }
+
+  const truncatedByPages = Boolean(appliedPageLimit) && data.numpages > data.numrender
+  if (truncatedByPages && logger) {
+    logger.debug(`Processed ${data.numrender} of ${data.numpages} page(s) from the PDF.`)
+  }
+
+  const extraction = {
+    totalPages: data.numpages,
+    processedPages: data.numrender,
+    pageLimit: appliedPageLimit || null,
+    autoLimited,
+    truncatedByPageLimit: truncatedByPages,
+    truncatedByCharacterLimit: truncatedByCharacters,
+    characterLimit: budget > 0 ? budget : null
+  }
+
+  if (metadata && typeof metadata === 'object') {
+    if (truncatedByPages) {
+      metadata.truncated = {
+        ...(metadata.truncated || {}),
+        reason: 'page-limit',
+        processedPages: data.numrender,
+        totalPages: data.numpages,
+        autoLimited
+      }
+    }
+    if (truncatedByCharacters) {
+      metadata.characterLimit = budget
+    }
+  }
+
   return {
-    text: text.slice(0, 20000),
+    text,
     metadata,
-    ocr
+    ocr,
+    extraction
   }
 }
 
