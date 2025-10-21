@@ -17,7 +17,7 @@ function execAsync (command) {
 }
 
 async function extractFrames ({ filePath, frameCount }) {
-  const tmpDir = path.join(os.tmpdir(), `ai-renamer-${randomUUID()}`)
+  const tmpDir = path.join(os.tmpdir(), `ji-renamer-${randomUUID()}`)
   await fs.mkdir(tmpDir, { recursive: true })
 
   try {
