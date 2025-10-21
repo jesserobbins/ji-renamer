@@ -52,10 +52,13 @@ function buildDefaultSystemMessage (options) {
   ]
 
   if (options.appendDate) {
-    const format = options.dateFormat || 'YYYY-MM-DD'
-    instructions.push(`- When date candidates are provided, append the most relevant date to the filename in ${format} format.`)
+    const rawFormat = options.dateValueFormat || options.dateFormat || 'YYYY-MM-DD'
+    const templateHint = options.dateFormatTemplate && options.dateFormatTemplate !== '${value}'
+      ? ` The CLI will wrap the raw value using the template "${options.dateFormatTemplate}".`
+      : ' The CLI will handle any additional templating or casing.'
+    instructions.push(`- When date candidates are provided, append the most relevant date to the filename in raw ${rawFormat} format.${templateHint}`)
     instructions.push('- Prioritise dates in this order: (1) dates clearly identified in the document text/OCR, (2) the original document creation date (document metadata first, then filesystem metadata), (3) the download/added date when no better option exists, and only then fall back to other dates.')
-    instructions.push('- Include an "applied_date" object in your JSON response describing the date you appended. Use the shape { "value": string | null, "source": string | null, "rationale": string | null } and ensure "value" matches the appended date.')
+    instructions.push(`- Include an "applied_date" object in your JSON response describing the selected date. Use the shape { "value": string | null, "source": string | null, "rationale": string | null } and ensure "value" matches the raw ${rawFormat} string you used.`)
   }
 
   return instructions.join('\n')
@@ -121,9 +124,12 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
   }
 
   if (options.appendDate) {
-    const resolvedCandidates = dateCandidates && Array.isArray(dateCandidates) ? dateCandidates : getDateCandidates(content, { dateFormat: options.dateFormat })
-    const format = options.dateFormat || 'YYYY-MM-DD'
-    segments.push(`Append-date mode is enabled. Include the most relevant date in the filename using ${format} format.`)
+    const resolvedCandidates = dateCandidates && Array.isArray(dateCandidates) ? dateCandidates : getDateCandidates(content, { dateFormat: options.dateValueFormat || options.dateFormat })
+    const format = options.dateValueFormat || options.dateFormat || 'YYYY-MM-DD'
+    const templateHint = options.dateFormatTemplate && options.dateFormatTemplate !== '${value}'
+      ? ` The CLI will wrap the raw value using "${options.dateFormatTemplate}".`
+      : ''
+    segments.push(`Append-date mode is enabled. Include the most relevant date in the filename using raw ${format} format.${templateHint}`)
     segments.push('Date selection priority reminder: 1) Document text/OCR dates 2) Original creation (metadata then filesystem) 3) Added/downloaded dates 4) Other candidates as a last resort.')
     if (resolvedCandidates.length) {
       const limitedCandidates = resolvedCandidates.slice(0, MAX_DATE_CANDIDATES)
@@ -142,21 +148,6 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
       }
       if (resolvedCandidates.length > limitedCandidates.length) {
         segments.push(`[Additional date candidates truncated to ${MAX_DATE_CANDIDATES}]`)
-      }
-    } else {
-      segments.push('No explicit date metadata detected; infer from content if possible.')
-    }
-  }
-
-  if (options.appendDate) {
-    const dateCandidates = getDateCandidates(content)
-    segments.push('Append-date mode is enabled. Include the most relevant date in the filename using YYYY-MM-DD format.')
-    if (dateCandidates.length) {
-      segments.push('Available date candidates:')
-      for (const candidate of dateCandidates) {
-        const raw = typeof candidate.rawValue === 'string' ? candidate.rawValue : JSON.stringify(candidate.rawValue)
-        const normalized = candidate.formattedValue ? ` (parsed: ${candidate.formattedValue})` : ''
-        segments.push(`${candidate.source}: ${raw}${normalized}`)
       }
     } else {
       segments.push('No explicit date metadata detected; infer from content if possible.')

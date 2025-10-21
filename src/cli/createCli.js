@@ -25,7 +25,8 @@ const defaultOptions = {
   subjectDestination: '',
   moveUnknownSubjects: false,
   appendDate: false,
-  dateFormat: 'YYYY-MM-DD',
+  dateFormat: '${value}',
+  dateValueFormat: 'YYYY-MM-DD',
   logFile: '',
   promptCharBudget: 12000,
   subjectFormat: '',
@@ -134,7 +135,13 @@ const CLI_OPTIONS = {
   dateFormat: {
     cliName: 'date-format',
     defaultKey: 'dateFormat',
-    describe: 'Date format to request when appending dates (e.g. YYYY-MM-DD, YYYYMMDD, YYYY-MM-DD_HHmm)',
+    describe: 'Template for appended date segments (use ${value}/${cased}; defaults to ${value})',
+    type: 'string'
+  },
+  dateValueFormat: {
+    cliName: 'date-value-format',
+    defaultKey: 'dateValueFormat',
+    describe: 'Raw date pattern requested from the model (e.g. YYYY-MM-DD, YYYYMMDD, YYYY-MM-DD_HHmm)',
     type: 'string'
   },
   logFile: {

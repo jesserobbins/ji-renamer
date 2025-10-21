@@ -143,11 +143,13 @@ Options:
                                 subject names                            [string]
       --dry-run                 Preview suggestions without renaming     [boolean]
       --summary                 Print a summary report after the run     [boolean]
-      --append-date             Ask the model to append the most relevant
-                                metadata/creation date in the configured
-                                format and report it in the log          [boolean]
-      --date-format             Override the appended date format (e.g.
-                                YYYY-MM-DD, YYYYMMDD, YYYY-MM-DD_HHmm)    [string]
+      --append-date             Ask the model to select the most relevant
+                                metadata/creation date and report it in the
+                                log                                    [boolean]
+      --date-format             Template for the appended date segment (use
+                                ${value}/${cased}; defaults to ${value})   [string]
+      --date-value-format       Raw date pattern to request from the model
+                                (e.g. YYYY-MM-DD, YYYYMMDD)               [string]
       --max-file-size           Skip files larger than the given size in MB
                                                                       [number]
       --only-extensions         Only process files with these extensions
@@ -192,7 +194,7 @@ trainCase: Two-Words
 ```
 
 ### Logging & Rollback
-Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ji-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated.
+Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ji-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated. During the run the CLI also renders ASCII status cards that summarise the chosen segments, subject confidence, date source, and whether the file is being moved, so you can follow the decision trail in real time.
 
 Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
 
@@ -226,6 +228,15 @@ When the model identifies the subject as `Mistral`, a brief of `AI Lab`, and a d
 
 ```
 [Mistral]-[AI Lab]-[Series-A Pitch Deck]-2025-10-01.pdf
+```
+
+Dates follow the same templating rules. `--date-format` controls how the selected date segment is wrapped (defaulting to `${value}`), while `--date-value-format` defines the raw date string the model should return (default `YYYY-MM-DD`). Combine them to generate output such as `[2025-10-05]` by running:
+
+```bash
+ji-renamer \
+  --append-date \
+  --date-value-format='YYYY-MM-DD' \
+  --date-format='[${cased}]'
 ```
 
 Subject folders created by `--organize-by-subject` continue to follow the subject name itself (for example `./Mistral`) so your workspace layout remains predictable.
