@@ -1,4 +1,5 @@
-const { renderPanel } = require('../utils/asciiPanel')
+const { renderPanel, applyPanelTheme } = require('../utils/asciiPanel')
+const { colorize } = require('../utils/ansi')
 
 function createSummary () {
   const renamed = []
@@ -26,36 +27,46 @@ function createSummary () {
         `Skipped : ${skipped.length}`,
         `Errors  : ${errors.length}`
       ])
-      panel.forEach(line => logger.info(line))
+      const themedPanel = applyPanelTheme(panel, {
+        border: 'magenta',
+        header: ['bold', 'magenta'],
+        label: ['bold', 'magenta'],
+        value: 'white'
+      })
+      themedPanel.forEach(line => logger.info(line))
 
       if (renamed.length) {
-        logger.info('Renamed files:')
+        logger.info(colorize('Renamed files:', ['bold', 'green']))
         renamed.forEach(item => {
-          const subjectLabel = item.subject ? `${item.subject}` : 'n/a'
-          const dateLabel = item.date && item.date.value ? item.date.value : 'none'
-          logger.info(`  ${item.original} -> ${item.newName} (subject: ${subjectLabel}, date: ${dateLabel})`)
+          const subjectLabel = item.subject ? colorize(item.subject, 'cyan') : colorize('n/a', 'gray')
+          const dateLabel = item.date && item.date.value
+            ? colorize(item.date.formatted || item.date.value, 'magenta')
+            : colorize('none', 'gray')
+          const originalPath = colorize(item.original, 'dim')
+          const newPath = colorize(item.newName, 'green')
+          logger.info(`  ${originalPath} -> ${newPath} (subject: ${subjectLabel}, date: ${dateLabel})`)
           if (Array.isArray(item.segments) && item.segments.length) {
             const segmentSummary = item.segments.map(segment => segment.value).join(' | ')
-            logger.info(`    segments: ${segmentSummary}`)
+            logger.info(`    ${colorize('segments:', ['bold', 'cyan'])} ${segmentSummary}`)
           }
         })
       }
       if (moved.length) {
-        logger.info('Moved files:')
+        logger.info(colorize('Moved files:', ['bold', 'cyan']))
         moved.forEach(item => {
-          logger.info(`  ${item.file} -> ${item.destination}`)
+          logger.info(`  ${colorize(item.file, 'dim')} -> ${colorize(item.destination, 'cyan')}`)
         })
       }
       if (skipped.length) {
-        logger.info('Skipped files:')
+        logger.info(colorize('Skipped files:', ['bold', 'yellow']))
         skipped.forEach(item => {
-          logger.info(`  ${item.file} (${item.reason})`)
+          logger.info(`  ${colorize(item.file, 'dim')} (${colorize(item.reason, 'yellow')})`)
         })
       }
       if (errors.length) {
-        logger.error('Errors encountered:')
+        logger.error(colorize('Errors encountered:', ['bold', 'red']))
         errors.forEach(item => {
-          logger.error(`  ${item.file}: ${item.error}`)
+          logger.error(colorize(`  ${item.file}: ${item.error}`, 'red'))
         })
       }
     },
