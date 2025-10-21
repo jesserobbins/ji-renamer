@@ -140,6 +140,8 @@ Options:
                                 subject names                            [string]
       --dry-run                 Preview suggestions without renaming     [boolean]
       --summary                 Print a summary report after the run     [boolean]
+      --verbose                Enable verbose logging with step-by-step timings
+                                                                       [boolean]
       --append-date             Ask the model to select the most relevant
                                 metadata/creation date and report it in the
                                 log                                    [boolean]
@@ -194,6 +196,8 @@ trainCase: Two-Words
 Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ji-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated. During the run the CLI also renders ASCII status cards that summarise the chosen segments, subject confidence, date source, and whether the file is being moved, so you can follow the decision trail in real time.
 
 Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
+
+When you need to diagnose performance or understand the processing pipeline, run the CLI with `--verbose`. Verbose mode upgrades the log level to `debug` and annotates every major step (filtering, content extraction, prompt construction, provider calls, filesystem operations, etc.) with intent descriptions and completion times so you can see exactly where time is spent.
 
 ## Subject Organization Workflow
 Enable `--organize-by-subject` to route accepted renames into folders named after their inferred company, project, or person. Before processing begins the CLI scans the destination directory, adds existing folder names to the prompt as hints, and keeps the list in memory to avoid duplicates during the run. Use `--subject-destination` to route the folders (and the generated log) to a different workspace, and add `--move-unknown-subjects` to quarantine low-confidence matches in an `Unknown` folder.

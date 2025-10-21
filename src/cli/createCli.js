@@ -17,6 +17,7 @@ const defaultOptions = {
   subjectStopwords: '',
   dryRun: false,
   summary: false,
+  verbose: false,
   jsonMode: true,
   maxFileSize: 0,
   onlyExtensions: '',
@@ -100,6 +101,11 @@ const CLI_OPTIONS = {
   },
   summary: {
     describe: 'Print a summary report after processing',
+    type: 'boolean'
+  },
+  verbose: {
+    alias: 'V',
+    describe: 'Enable verbose logging with step-by-step timings',
     type: 'boolean'
   },
   maxFileSize: {

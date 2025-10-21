@@ -22,6 +22,11 @@ async function main () {
     return
   }
 
+  if (argv.verbose) {
+    logger.setLevel('debug')
+    logger.info('Verbose logging enabled; detailed step timings will be displayed.')
+  }
+
   const targetPath = argv._[0]
   if (!targetPath) {
     cli.showHelp()
@@ -39,7 +44,7 @@ async function main () {
   await saveConfig(persistedOptions)
 
   try {
-    await runRenamer(resolvedTargetPath, effectiveOptions, logger)
+    await logger.time('runRenamer', 'Executing rename workflow', () => runRenamer(resolvedTargetPath, effectiveOptions, logger))
   } catch (error) {
     logger.error(error.message)
     if (error.stack) {
