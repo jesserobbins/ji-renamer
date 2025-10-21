@@ -9,13 +9,19 @@
   },
   "description": "A Node.js CLI that uses Ollama and LM Studio models (Llava, Gemma, Llama etc.) to intelligently rename files by their contents",
   "author": {
-    "name": "Ozgur Ozer",
-    "email": "ozgr@live.com",
-    "url": "https://github.com/ozgrozer"
+    "name": "ai-renamer Contributors",
+    "url": "https://github.com/ai-renamer"
   },
+  "contributors": [
+    {
+      "name": "Özgür Özer",
+      "url": "https://github.com/ozgrozer",
+      "comment": "Author of the original ai-renamer project that inspired this rewrite"
+    }
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ozgrozer/ai-renamer.git"
+    "url": "git+https://github.com/ai-renamer/ai-renamer.git"
   },
   "dependencies": {
     "axios": "^1.7.2",

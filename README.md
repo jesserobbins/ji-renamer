@@ -14,13 +14,14 @@ A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's cont
 - [Command Options](#command-options)
 - [Subject Organization Workflow](#subject-organization-workflow)
 - [Contribution](#contribution)
+- [Credits](#credits)
 - [License](#license)
 - [Product Requirements Document](#product-requirements-document)
 
 ## Overview
 `ai-renamer` is a cross-platform CLI for renaming files according to the information inside them. Point the command at a folder or a single file and the tool will extract context (text, OCR frames, metadata) before asking an LLM to craft a concise filename. Multiple providers are supported, including Ollama, LM Studio, and OpenAI.
 
-> **Attribution**: This project is a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer. The upstream repository contains the original implementation and ongoing development by the creator.
+> **Attribution**: This codebase began as a fork of [ozgrozer/ai-renamer](https://github.com/ozgrozer/ai-renamer) by Özgür Özer, but it has since been rewritten from the ground up and is actively maintained here. Please direct questions, issues, and contributions to this repository rather than the original project.
 
 The CLI stores your preferred switches (provider, model, case style, subject-organization behavior, etc.) in a local config file so recurring workflows stay one command away.
 
@@ -29,13 +30,17 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 - **Provider flexibility** – Works with local Ollama models, LM Studio, or OpenAI models by toggling flags.
 - **Case formatting** – Choose the case convention that best fits your filesystem (`camelCase`, `kebabCase`, `snakeCase`, etc.).
 - **Batch processing** – Walk directory trees, optionally including subdirectories, and rename as you go.
+- **macOS metadata aware** – On macOS the CLI harvests Spotlight metadata (authors, where from, tags, comments, etc.) to give the model richer hints.
 - **Safety controls** – Use `--dry-run` to preview results, enforce size or extension allowlists/denylists, and print a summary report of every decision.
+- **Traceable logging** – Every run emits a JSONL audit log (to the target directory by default) so you can review or roll back renames later.
 - **Subject organization** – Group files into startup- or project-specific folders, feed existing folder names back into prompts to keep naming consistent, and optionally quarantine uncertain matches in an `Unknown` folder.
 
 ## Installation
 ### Prerequisites
 - [Node.js](https://nodejs.org/) 18 or newer.
 - [`ffmpeg`](https://ffmpeg.org/) and `ffprobe` available on your `PATH` for video frame extraction.
+- [`tesseract`](https://tesseract-ocr.github.io/tessdoc/Installation.html) CLI available on your `PATH` to OCR image-only PDFs (Homebrew `brew install tesseract` on macOS).
+- [`pdftoppm`](https://poppler.freedesktop.org/) (part of the Poppler utilities) on your `PATH` so PDFs that only contain images can be rasterised before OCR (`brew install poppler` on macOS).
 
 ```bash
 # Install globally
@@ -100,7 +105,10 @@ npx ai-renamer /path --provider=lm-studio --base-url=http://127.0.0.1:1234/v1
 > **Note**
 > OpenAI-compatible servers (LM Studio, vLLM, etc.) expose their chat endpoints under `/v1/chat/completions`. The CLI will append `/v1` automatically if you omit it, but declaring it explicitly avoids extra warnings in the logs.
 
-If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, disable JSON mode with `--no-json-mode` (or set `"jsonMode": false` in `~/ai-renamer.json`). The CLI will fall back to plain text responses while keeping the JSON parsing instructions in the prompt.
+If your OpenAI-compatible server returns an error such as ``"'response_format.type' must be 'json_schema' or 'text'"``, the CLI will automatically retry the request with plain text responses while keeping the JSON parsing instructions in the prompt. You can also disable JSON mode proactively with `--no-json-mode` (or set `"jsonMode": false` in `~/ai-renamer.json`).
+
+> **Prompt size control**
+> Smaller-context models can struggle with the detailed metadata that `ai-renamer` supplies. Use `--prompt-char-budget=8000` (or your preferred limit) to cap the prompt length, or set the value to `0` to disable trimming entirely. The CLI will automatically annotate the prompt when segments are truncated so you know what was omitted.
 
 ## Command Options
 All CLI flags are persisted to `~/ai-renamer.json`, so you only need to configure them once. Run `npx --no-install ai-renamer-local --help` for the full list:
@@ -136,7 +144,10 @@ Options:
       --dry-run                 Preview suggestions without renaming     [boolean]
       --summary                 Print a summary report after the run     [boolean]
       --append-date             Ask the model to append the most relevant
-                                metadata/creation date (YYYY-MM-DD)      [boolean]
+                                metadata/creation date in the configured
+                                format and report it in the log          [boolean]
+      --date-format             Override the appended date format (e.g.
+                                YYYY-MM-DD, YYYYMMDD, YYYY-MM-DD_HHmm)    [string]
       --max-file-size           Skip files larger than the given size in MB
                                                                       [number]
       --only-extensions         Only process files with these extensions
@@ -148,6 +159,17 @@ Options:
                                                                       [string]
       --move-unknown-subjects   Send low-confidence matches to an Unknown
                                  folder                                 [boolean]
+      --log-file                Custom path for the JSONL operation log   [string]
+      --prompt-char-budget      Maximum characters to send to the model (0 disables trimming)
+                                                                        [number]
+      --subject-format          Template for embedding the subject segment (use
+                                ${value} or ${cased}; empty disables)    [string]
+      --subject-brief-format    Template for a concise subject descriptor
+                                segment (use ${value}/${cased})          [string]
+      --document-description-format
+                                Template for a document description segment
+                                (use ${value}/${cased})                  [string]
+      --segment-separator       Separator between filename segments       [string]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```
@@ -169,15 +191,53 @@ snakeCase: two_words
 trainCase: Two-Words
 ```
 
+### Logging & Rollback
+Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ai-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated.
+
+Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
+
 ## Subject Organization Workflow
 Enable `--organize-by-subject` to route accepted renames into folders named after their inferred company, project, or person. Before processing begins the CLI scans the destination directory, adds existing folder names to the prompt as hints, and keeps the list in memory to avoid duplicates during the run. Use `--subject-destination` to route the folders (and the generated log) to a different workspace, and add `--move-unknown-subjects` to quarantine low-confidence matches in an `Unknown` folder.
 
 Dry-run mode prints the proposed folder moves without touching the filesystem so you can vet the plan before committing. When renames are confirmed, the tool records the chosen subject, destination, and confidence in the run summary for later auditing.
 
-Prompts emphasise clean company names by stripping financing or investor descriptors (e.g. "pitch", "Series A", "seed round"). Add your own red-flag tokens with `--subject-stopwords`, or append bespoke instructions with `--instructions-file` to fine-tune the guidance the LLM receives.
+If you need to avoid specific tokens in inferred subjects, pass them via `--subject-stopwords`, or append bespoke instructions with `--instructions-file` to fine-tune the guidance the LLM receives.
+
+### Subject & description templates
+
+Use the formatting flags to structure filenames consistently while still letting the model infer useful metadata. Each template supports two placeholders:
+
+- `${value}` – the raw text returned by the model (for example the proper noun subject or the title-style description).
+- `${cased}` – the same text passed through the active `--case` formatter.
+
+For example:
+
+```bash
+ai-renamer \
+  --subject-format='[${value}]' \
+  --subject-brief-format='[${value}]' \
+  --document-description-format='[${value}]' \
+  --segment-separator='-' \
+  --append-date \
+  ~/Downloads
+```
+
+When the model identifies the subject as `Mistral`, a brief of `AI Lab`, and a document description of `Series-A Pitch Deck`, the resulting filename would resemble:
+
+```
+[Mistral]-[AI Lab]-[Series-A Pitch Deck]-2025-10-01.pdf
+```
+
+Subject folders created by `--organize-by-subject` continue to follow the subject name itself (for example `./Mistral`) so your workspace layout remains predictable.
 
 ## Contribution
-Feel free to contribute. Open a new [issue](https://github.com/ozgrozer/ai-renamer/issues) or start a [pull request](https://github.com/ozgrozer/ai-renamer/pulls).
+Feel free to contribute. Open a new [issue](../../issues/new/choose) or start a [pull request](../../compare) against this repository.
+
+## Credits
+- Original concept and initial implementation by [Özgür Özer](https://github.com/ozgrozer).
+- Comprehensive rewrite, metadata pipeline, OCR handling, provider integrations, and ongoing maintenance by the current ai-renamer contributors.
+
+Please direct support requests, bug reports, and feature ideas to this repository. The upstream author is not responsible for this rewritten codebase.
 
 ## License
 GPLv3

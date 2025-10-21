@@ -4,6 +4,7 @@ const { cleanSubjectName, DEFAULT_STOPWORDS } = require('../utils/subject')
 
 const DEFAULT_SUBJECT_RULES = [
   'Subject names must only include the company, project, or person responsible for the artifact.',
+  'Treat the subject as a proper noun — capitalise entities appropriately and avoid generic descriptors.',
   'If the material references financing, investors, or rounds without a clear subject, return null.',
   'Remove legal form suffixes only if they appear as noise (e.g. keep "Acme Labs Inc" but drop trailing financing descriptors).'
 ]
@@ -34,6 +35,8 @@ function buildSystemMessage ({ caseStyle, language, subjectStopwords, extraSyste
   lines.push('  "filename": string,')
   lines.push('  "subject": string | null,')
   lines.push('  "subject_confidence": number (0-1),')
+  lines.push('  "subject_brief": string | null,')
+  lines.push('  "document_description": string | null,')
   lines.push('  "summary": string')
   lines.push('}')
   lines.push('Do not emit commentary outside the JSON object.')
@@ -45,6 +48,8 @@ function buildSystemMessage ({ caseStyle, language, subjectStopwords, extraSyste
     lines.push(`- Never include these tokens in the subject: ${subjectStopwords.join(', ')}.`)
   }
   lines.push('- If unsure about the subject, set "subject" to null and "subject_confidence" to 0.')
+  lines.push('- Provide "subject_brief" as a short (≤5 word) noun phrase that concisely describes the subject when possible; otherwise return null.')
+  lines.push('- Provide "document_description" as a short, title-style description of the document (e.g. "Series-A Pitch Deck").')
   if (extraSystem) {
     lines.push('Additional system instructions:')
     lines.push(extraSystem)

@@ -5,8 +5,9 @@ const { extractText } = require('./textExtractor')
 const { extractPdf } = require('./pdfExtractor')
 const { extractImage } = require('./imageExtractor')
 const { extractFrames } = require('./videoExtractor')
+const { collectSystemMetadata } = require('../utils/systemMetadata')
 
-async function extractContent (filePath, options) {
+async function extractContent (filePath, options, logger) {
   const category = getFileCategory(filePath)
   const baseName = path.basename(filePath)
   const stats = await fs.stat(filePath)
@@ -23,28 +24,60 @@ async function extractContent (filePath, options) {
     createdAt
   }
 
+  const systemMetadata = await collectSystemMetadata(filePath, logger)
+  const metadata = {}
+  if (systemMetadata) {
+    metadata.mac = systemMetadata
+  }
+
   if (category === 'text') {
     const text = await extractText(filePath)
-    return { ...baseContext, text }
+    const payload = { ...baseContext, text }
+    if (Object.keys(metadata).length) {
+      payload.metadata = metadata
+    }
+    return payload
   }
 
   if (category === 'pdf') {
-    const { text, metadata } = await extractPdf(filePath)
-    return { ...baseContext, text, metadata }
+    const { text, metadata: pdfMetadata, ocr } = await extractPdf(filePath, { logger })
+    if (pdfMetadata && Object.keys(pdfMetadata).length) {
+      metadata.document = pdfMetadata
+    }
+    const payload = { ...baseContext, text }
+    if (Object.keys(metadata).length) {
+      payload.metadata = metadata
+    }
+    if (ocr) {
+      payload.ocr = ocr
+    }
+    return payload
   }
 
   if (category === 'image') {
     const image = await extractImage(filePath)
-    return { ...baseContext, image }
+    const payload = { ...baseContext, image }
+    if (Object.keys(metadata).length) {
+      payload.metadata = metadata
+    }
+    return payload
   }
 
   if (category === 'video') {
     const { frames, duration, frameCount, error } = await extractFrames({ filePath, frameCount: options.frames || 3 })
-    return { ...baseContext, frames, duration, frameCount, frameError: error }
+    const payload = { ...baseContext, frames, duration, frameCount, frameError: error }
+    if (Object.keys(metadata).length) {
+      payload.metadata = metadata
+    }
+    return payload
   }
 
   const buffer = await fs.readFile(filePath)
-  return { ...baseContext, binarySnippet: buffer.slice(0, 4096).toString('base64') }
+  const payload = { ...baseContext, binarySnippet: buffer.slice(0, 4096).toString('base64') }
+  if (Object.keys(metadata).length) {
+    payload.metadata = metadata
+  }
+  return payload
 }
 
 module.exports = {
