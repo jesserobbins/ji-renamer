@@ -3,7 +3,7 @@ const os = require('os')
 const path = require('path')
 const { defaultOptions } = require('../cli/createCli')
 
-const CONFIG_FILE = path.join(os.homedir(), 'ai-renamer.json')
+const CONFIG_FILE = path.join(os.homedir(), 'ji-renamer.json')
 const PERSISTED_KEYS = new Set([
   'provider',
   'apiKey',
@@ -26,6 +26,7 @@ const PERSISTED_KEYS = new Set([
   'jsonMode',
   'appendDate',
   'dateFormat',
+  'dateValueFormat',
   'logFile',
   'promptCharBudget',
   'subjectFormat',
