@@ -19,6 +19,7 @@ const defaultOptions = {
   summary: false,
   verbose: false,
   jsonMode: true,
+  visionMode: false,
   maxFileSize: 0,
   onlyExtensions: '',
   ignoreExtensions: '',
@@ -36,7 +37,9 @@ const defaultOptions = {
   segmentSeparator: '-',
   pdfPageLimit: 0,
   pdfLargeFileThreshold: 25,
-  pdfLargeFilePageLimit: 30
+  pdfLargeFilePageLimit: 30,
+  pdfVisionPageLimit: 12,
+  pdfVisionDpi: 144
 }
 
 const CLI_OPTIONS = {
@@ -109,6 +112,12 @@ const CLI_OPTIONS = {
   verbose: {
     alias: 'V',
     describe: 'Enable verbose logging with step-by-step timings',
+    type: 'boolean'
+  },
+  visionMode: {
+    cliName: 'vision-mode',
+    defaultKey: 'visionMode',
+    describe: 'Attach rendered PDF pages/images to prompts so vision-capable models can reason over them',
     type: 'boolean'
   },
   maxFileSize: {
@@ -205,6 +214,18 @@ const CLI_OPTIONS = {
     cliName: 'pdf-large-file-page-limit',
     defaultKey: 'pdfLargeFilePageLimit',
     describe: 'Number of pages to process when auto-limiting large PDFs is triggered',
+    type: 'number'
+  },
+  pdfVisionPageLimit: {
+    cliName: 'pdf-vision-page-limit',
+    defaultKey: 'pdfVisionPageLimit',
+    describe: 'Maximum number of PDF pages to rasterise into images when vision mode is enabled (0 renders every page)',
+    type: 'number'
+  },
+  pdfVisionDpi: {
+    cliName: 'pdf-vision-dpi',
+    defaultKey: 'pdfVisionDpi',
+    describe: 'Resolution in DPI used when rendering PDF pages for vision mode',
     type: 'number'
   },
   jsonMode: {

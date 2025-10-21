@@ -31,6 +31,7 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 - **Safety controls** – Use `--dry-run` to preview results, enforce size or extension allowlists/denylists, and print a summary report of every decision.
 - **Traceable logging** – Every run emits a JSONL audit log (to the target directory by default) so you can review or roll back renames later.
 - **Subject organization** – Group files into startup- or project-specific folders, feed existing folder names back into prompts to keep naming consistent, and optionally quarantine uncertain matches in an `Unknown` folder.
+- **Vision mode** – Render PDF pages to images and attach them to prompts so multimodal models can reason over decks, scans, and other visual-heavy files without waiting for OCR.
 
 ## Installation
 ### Prerequisites
@@ -68,6 +69,18 @@ ji-renamer ~/Downloads/Pitches \
   --subject-destination=~/DealRoom \
   --move-unknown-subjects
 ```
+
+### Vision mode for decks and scans
+Enable `--vision-mode` when working with heavy visual documents (pitch decks, scanned agreements, forms). The CLI will rasterise
+the first pages to JPEG, attach the images to the prompt, and still include extracted text/OCR for models that can read both. Combine
+this flag with:
+
+- `--pdf-vision-page-limit` – cap how many page renders are attached (defaults to 12; set to `0` for every page, though large
+  PDFs can inflate request sizes).
+- `--pdf-vision-dpi` – adjust the render resolution if your model benefits from sharper images (defaults to 144 DPI).
+- Existing `--pdf-page-limit` / large-file guards – the smallest configured limit is respected to avoid runaway conversions.
+
+If `pdftoppm` is missing the CLI will log a warning and continue with the text-only pipeline.
 
 ## Model Providers
 ### Ollama
@@ -142,6 +155,8 @@ Options:
       --summary                 Print a summary report after the run     [boolean]
       --verbose                Enable verbose logging with step-by-step timings
                                                                        [boolean]
+      --vision-mode            Attach rendered PDF pages/images so vision models
+                                can analyse them                         [boolean]
       --append-date             Ask the model to select the most relevant
                                 metadata/creation date and report it in the
                                 log                                    [boolean]
@@ -179,6 +194,10 @@ Options:
       --pdf-large-file-page-limit
                                 Page count to process when the large-file guard triggers
                                                                         [number]
+      --pdf-vision-page-limit  Maximum number of PDF pages to rasterise for
+                                vision mode (0 renders every page)       [number]
+      --pdf-vision-dpi         DPI used when rendering PDF pages for vision mode
+                                                                         [number]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```
