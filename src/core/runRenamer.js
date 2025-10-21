@@ -15,7 +15,8 @@ const { parseModelResponse } = require('../utils/parseModelResponse')
 const { createInstructionSet } = require('./instructionSet')
 const { getDateCandidates, buildDateFormatRegex } = require('../utils/fileDates')
 const { createOperationLog } = require('../utils/operationLog')
-const { renderPanel } = require('../utils/asciiPanel')
+const { renderPanel, applyPanelTheme } = require('../utils/asciiPanel')
+const { colorize } = require('../utils/ansi')
 
 const DATE_TOKEN_PATTERN = /(YYYY|YY|MM|DD|HH|mm|ss)/
 
@@ -59,13 +60,29 @@ function stripTrailingDate (value, pattern) {
     .replace(/[-_.\s]+$/, '')
 }
 
-function emitPanel (logger, level, title, lines) {
+function emitPanel (logger, level, title, lines, theme = {}) {
   if (!logger || typeof logger[level] !== 'function') {
     return
   }
-  const panelLines = renderPanel(title, lines)
+  const panel = renderPanel(title, lines)
+  const panelLines = applyPanelTheme(panel, theme)
   for (const line of panelLines) {
     logger[level](line)
+  }
+}
+
+const PANEL_THEMES = {
+  dryRun: {
+    border: 'cyan',
+    header: ['bold', 'cyan'],
+    label: ['bold', 'cyan'],
+    value: 'white'
+  },
+  success: {
+    border: 'green',
+    header: ['bold', 'green'],
+    label: ['bold', 'green'],
+    value: 'white'
   }
 }
 
@@ -153,7 +170,7 @@ async function runRenamer (targetPath, options, logger) {
   const rootDirectory = stats.isDirectory() ? targetPath : path.dirname(targetPath)
   const files = await discoverFiles(targetPath, options.includeSubdirectories)
   if (!files.length) {
-    logger.warn('No files found to process.')
+    logger.warn(colorize('No files found to process.', 'yellow'))
     return
   }
 
@@ -184,7 +201,7 @@ async function runRenamer (targetPath, options, logger) {
     try {
       const filterResult = await applyFilters(filePath, options)
       if (filterResult.skipped) {
-        logger.info(`Skipping ${filePath}: ${filterResult.reason}`)
+        logger.info(colorize(`Skipping ${filePath}: ${filterResult.reason}`, 'yellow'))
         summary.addSkip({ file: filePath, reason: filterResult.reason })
         operationLog.write({
           timestamp: new Date().toISOString(),
@@ -195,7 +212,7 @@ async function runRenamer (targetPath, options, logger) {
         continue
       }
 
-      logger.info(`Processing ${filePath}`)
+      logger.info(colorize(`Processing ${filePath}`, 'cyan'))
       const content = await extractContent(filePath, options, logger)
       const dateCandidates = options.appendDate ? getDateCandidates(content, { dateFormat: dateValueFormat }) : []
       const subjectHints = subjectManager ? subjectManager.getHints() : []
@@ -326,7 +343,8 @@ async function runRenamer (targetPath, options, logger) {
         const formattedHint = appliedDateRecord.formatted && appliedDateRecord.formatted !== appliedDateRecord.value
           ? ` → ${appliedDateRecord.formatted}`
           : ''
-        logger.info(`Selected date for ${path.basename(filePath)}: ${appliedDateRecord.value}${formattedHint}${appliedDateRecord.source ? ` (source: ${appliedDateRecord.source})` : ''}`)
+        const sourceLabel = appliedDateRecord.source ? ` (source: ${appliedDateRecord.source})` : ''
+        logger.info(colorize(`Selected date for ${path.basename(filePath)}: ${appliedDateRecord.value}${formattedHint}${sourceLabel}`, 'magenta'))
       } else if (options.appendDate) {
         logger.warn(`No date appended for ${path.basename(filePath)} despite append-date being enabled.`)
       }
@@ -353,7 +371,7 @@ async function runRenamer (targetPath, options, logger) {
       ].filter(Boolean)
 
       if (options.dryRun) {
-        emitPanel(logger, 'info', '✱ DRY RUN PLAN', panelLines)
+        emitPanel(logger, 'info', '✱ DRY RUN PLAN', panelLines, PANEL_THEMES.dryRun)
         summary.addRename({
           original: filePath,
           newName: destinationPath,
@@ -385,7 +403,7 @@ async function runRenamer (targetPath, options, logger) {
       }
 
       await fs.rename(filePath, destinationPath)
-      emitPanel(logger, 'info', '✓ RENAMED', panelLines)
+      emitPanel(logger, 'info', '✓ RENAMED', panelLines, PANEL_THEMES.success)
       summary.addRename({
         original: filePath,
         newName: destinationPath,
@@ -418,7 +436,7 @@ async function runRenamer (targetPath, options, logger) {
         moved
       })
     } catch (error) {
-      logger.error(`Error processing ${filePath}: ${error.message}`)
+      logger.error(colorize(`Error processing ${filePath}: ${error.message}`, 'red'))
       summary.addError({ file: filePath, error: error.message })
       operationLog.write({
         timestamp: new Date().toISOString(),
