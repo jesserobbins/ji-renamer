@@ -149,40 +149,48 @@ function normaliseModelResult (rawResult) {
 }
 
 async function runRenamer (targetPath, options, logger) {
-  const stats = await fs.stat(targetPath)
+  const runStep = async (label, intention, fn) => {
+    if (logger && typeof logger.time === 'function') {
+      return logger.time(label, intention, fn)
+    }
+    return fn()
+  }
+
+  const stats = await runStep('fs.stat', `Inspecting target path ${targetPath}`, () => fs.stat(targetPath))
   const rootDirectory = stats.isDirectory() ? targetPath : path.dirname(targetPath)
-  const files = await discoverFiles(targetPath, options.includeSubdirectories)
+  const files = await runStep('discoverFiles', `Scanning for files starting at ${targetPath}`, () => discoverFiles(targetPath, options.includeSubdirectories))
+  logger.debug(`discoverFiles returned ${files.length} candidate file(s).`)
   if (!files.length) {
     logger.warn('No files found to process.')
     return
   }
 
-  const provider = createProviderClient(options, logger)
-  const instructionSet = await createInstructionSet(options, logger)
+  const provider = await runStep('createProviderClient', `Initialising provider client (${options.provider || 'ollama'})`, () => createProviderClient(options, logger))
+  const instructionSet = await runStep('createInstructionSet', 'Loading instruction set', () => createInstructionSet(options, logger))
 
   const { template: dateTemplate, valueFormat: dateValueFormat } = resolveDatePreferences(options)
 
-  const operationLog = await createOperationLog({
+  const operationLog = await runStep('operationLog.create', 'Preparing operation log', () => createOperationLog({
     rootDirectory,
     explicitPath: options.logFile,
     logger
-  })
+  }))
   const datePattern = buildDateFormatRegex(dateValueFormat)
 
   let subjectManager = null
   if (options.organizeBySubject) {
     const subjectBase = path.resolve(options.subjectDestination || rootDirectory)
-    subjectManager = await createSubjectManager({
+    subjectManager = await runStep('subjectManager.init', `Preparing subject folders at ${subjectBase}`, () => createSubjectManager({
       baseDirectory: subjectBase,
       moveUnknownSubjects: Boolean(options.moveUnknownSubjects)
-    }, logger)
+    }, logger))
   }
 
   const summary = createSummary()
 
   for (const filePath of files) {
     try {
-      const filterResult = await applyFilters(filePath, options)
+      const filterResult = await runStep('applyFilters', `Evaluating filters for ${path.basename(filePath)}`, () => applyFilters(filePath, options))
       if (filterResult.skipped) {
         logger.info(`Skipping ${filePath}: ${filterResult.reason}`)
         summary.addSkip({ file: filePath, reason: filterResult.reason })
@@ -196,12 +204,12 @@ async function runRenamer (targetPath, options, logger) {
       }
 
       logger.info(`Processing ${filePath}`)
-      const content = await extractContent(filePath, options, logger)
+      const content = await runStep('extractContent', `Extracting content from ${path.basename(filePath)}`, () => extractContent(filePath, options, logger))
       const dateCandidates = options.appendDate ? getDateCandidates(content, { dateFormat: dateValueFormat }) : []
       const subjectHints = subjectManager ? subjectManager.getHints() : []
       const promptOptions = { ...options, dateValueFormat, dateFormatTemplate: dateTemplate }
-      const prompt = buildPrompt({ content, options: promptOptions, subjectHints, instructionSet, dateCandidates })
-      const modelResponse = await provider.generateFilename(prompt)
+      const prompt = await runStep('buildPrompt', `Constructing prompt for ${path.basename(filePath)}`, () => buildPrompt({ content, options: promptOptions, subjectHints, instructionSet, dateCandidates }))
+      const modelResponse = await runStep('provider.generateFilename', `Requesting filename suggestion for ${path.basename(filePath)}`, () => provider.generateFilename(prompt))
       const { filename, subject, summary: fileSummary, subjectConfidence, appliedDate, subjectBrief, documentDescription } = normaliseModelResult(modelResponse)
 
       const cleanedSubject = instructionSet?.sanitizeSubject ? instructionSet.sanitizeSubject(subject) : subject
@@ -283,19 +291,19 @@ async function runRenamer (targetPath, options, logger) {
       let resolvedSubject = effectiveSubject
 
       if (subjectManager) {
-        const subjectResolution = await subjectManager.resolveDestination({
+        const subjectResolution = await runStep('subjectManager.resolve', `Resolving destination for ${path.basename(filePath)}`, () => subjectManager.resolveDestination({
           subject: effectiveSubject,
           confidence: effectiveConfidence
-        })
+        }))
         if (subjectResolution) {
           destinationDirectory = subjectResolution.directory
           resolvedSubject = subjectResolution.subject
         }
       }
 
-      await fs.mkdir(destinationDirectory, { recursive: true })
+      await runStep('fs.mkdir', `Ensuring destination directory ${destinationDirectory}`, () => fs.mkdir(destinationDirectory, { recursive: true }))
 
-      const finalName = ensureUniqueName(destinationDirectory, sanitizedName, fssync.existsSync)
+      const finalName = await runStep('ensureUniqueName', `Ensuring unique filename for ${sanitizedName}`, () => ensureUniqueName(destinationDirectory, sanitizedName, fssync.existsSync))
       const destinationPath = path.join(destinationDirectory, finalName)
 
       if (options.appendDate && !appliedDateValue) {
@@ -384,7 +392,7 @@ async function runRenamer (targetPath, options, logger) {
         continue
       }
 
-      await fs.rename(filePath, destinationPath)
+      await runStep('fs.rename', `Renaming ${path.basename(filePath)} to ${finalName}`, () => fs.rename(filePath, destinationPath))
       emitPanel(logger, 'info', '✓ RENAMED', panelLines)
       summary.addRename({
         original: filePath,

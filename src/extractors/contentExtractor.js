@@ -40,7 +40,19 @@ async function extractContent (filePath, options, logger) {
   }
 
   if (category === 'pdf') {
-    const { text, metadata: pdfMetadata, ocr } = await extractPdf(filePath, { logger })
+    const pdfOptions = {
+      logger,
+      ocrLanguages: options.ocrLanguages,
+      pageLimit: options.pdfPageLimit,
+      largeFileThresholdBytes: Math.max(0, Number(options.pdfLargeFileThreshold || 0)) * 1024 * 1024,
+      largeFilePageLimit: options.pdfLargeFilePageLimit,
+      textCharBudget: options.promptCharBudget,
+      stats,
+      visionMode: Boolean(options.visionMode),
+      visionPageLimit: options.pdfVisionPageLimit,
+      visionDpi: options.pdfVisionDpi
+    }
+    const { text, metadata: pdfMetadata, ocr, extraction, images } = await extractPdf(filePath, pdfOptions)
     if (pdfMetadata && Object.keys(pdfMetadata).length) {
       metadata.document = pdfMetadata
     }
@@ -51,12 +63,18 @@ async function extractContent (filePath, options, logger) {
     if (ocr) {
       payload.ocr = ocr
     }
+    if (extraction) {
+      payload.pdfExtraction = extraction
+    }
+    if (Array.isArray(images) && images.length) {
+      payload.images = images
+    }
     return payload
   }
 
   if (category === 'image') {
     const image = await extractImage(filePath)
-    const payload = { ...baseContext, image }
+    const payload = { ...baseContext, image, images: [image] }
     if (Object.keys(metadata).length) {
       payload.metadata = metadata
     }

@@ -31,6 +31,7 @@ The CLI stores your preferred switches (provider, model, case style, subject-org
 - **Safety controls** – Use `--dry-run` to preview results, enforce size or extension allowlists/denylists, and print a summary report of every decision.
 - **Traceable logging** – Every run emits a JSONL audit log (to the target directory by default) so you can review or roll back renames later.
 - **Subject organization** – Group files into startup- or project-specific folders, feed existing folder names back into prompts to keep naming consistent, and optionally quarantine uncertain matches in an `Unknown` folder.
+- **Vision mode** – Render PDF pages to images and attach them to prompts so multimodal models can reason over decks, scans, and other visual-heavy files without waiting for OCR.
 
 ## Installation
 ### Prerequisites
@@ -68,6 +69,18 @@ ji-renamer ~/Downloads/Pitches \
   --subject-destination=~/DealRoom \
   --move-unknown-subjects
 ```
+
+### Vision mode for decks and scans
+Enable `--vision-mode` when working with heavy visual documents (pitch decks, scanned agreements, forms). The CLI will rasterise
+the first pages to JPEG, attach the images to the prompt, and still include extracted text/OCR for models that can read both. Combine
+this flag with:
+
+- `--pdf-vision-page-limit` – cap how many page renders are attached (defaults to 12; set to `0` for every page, though large
+  PDFs can inflate request sizes).
+- `--pdf-vision-dpi` – adjust the render resolution if your model benefits from sharper images (defaults to 144 DPI).
+- Existing `--pdf-page-limit` / large-file guards – the smallest configured limit is respected to avoid runaway conversions.
+
+If `pdftoppm` is missing the CLI will log a warning and continue with the text-only pipeline.
 
 ## Model Providers
 ### Ollama
@@ -140,6 +153,10 @@ Options:
                                 subject names                            [string]
       --dry-run                 Preview suggestions without renaming     [boolean]
       --summary                 Print a summary report after the run     [boolean]
+      --verbose                Enable verbose logging with step-by-step timings
+                                                                       [boolean]
+      --vision-mode            Attach rendered PDF pages/images so vision models
+                                can analyse them                         [boolean]
       --append-date             Ask the model to select the most relevant
                                 metadata/creation date and report it in the
                                 log                                    [boolean]
@@ -169,6 +186,18 @@ Options:
                                 Template for a document description segment
                                 (use ${value}/${cased})                  [string]
       --segment-separator       Separator between filename segments       [string]
+      --pdf-page-limit          Limit PDF extraction to the first N pages (0 processes the entire file)
+                                                                        [number]
+      --pdf-large-file-threshold
+                                Automatically limit large PDFs once they exceed this size in MB (0 disables)
+                                                                        [number]
+      --pdf-large-file-page-limit
+                                Page count to process when the large-file guard triggers
+                                                                        [number]
+      --pdf-vision-page-limit  Maximum number of PDF pages to rasterise for
+                                vision mode (0 renders every page)       [number]
+      --pdf-vision-dpi         DPI used when rendering PDF pages for vision mode
+                                                                         [number]
       --json-mode               Force providers to request JSON responses
                                                                        [boolean]
 ```
@@ -194,6 +223,11 @@ trainCase: Two-Words
 Each invocation produces a newline-delimited JSON (`.jsonl`) log so you can audit or undo a run. By default the log is written next to the root folder you process (for example `ji-renamer-log-2025-01-01T12-00-00Z.jsonl`), and every entry captures the original path, the proposed or final destination, chosen subject, the concise subject brief, any notes returned by the model, the document description, the date that was appended, and the list of candidate dates the model evaluated. During the run the CLI also renders ASCII status cards that summarise the chosen segments, subject confidence, date source, and whether the file is being moved, so you can follow the decision trail in real time.
 
 Pass `--log-file=/custom/path.jsonl` to override the destination or to aggregate multiple runs into the same log. Because the format is machine-readable you can build rollback scripts that replay entries in reverse to restore original filenames.
+
+When you need to diagnose performance or understand the processing pipeline, run the CLI with `--verbose`. Verbose mode upgrades the log level to `debug` and annotates every major step (filtering, content extraction, prompt construction, provider calls, filesystem operations, etc.) with intent descriptions and completion times so you can see exactly where time is spent.
+
+> **Large PDF handling**
+> Massive PDFs can take several minutes to parse. By default the CLI automatically limits extraction to the first 30 pages when a file exceeds 25 MB, logging the truncation in verbose mode and in the metadata provided to the model. Override this behavior with `--pdf-page-limit=<pages>` or fine-tune the guard via `--pdf-large-file-threshold` and `--pdf-large-file-page-limit` when you need deeper scans.
 
 ## Subject Organization Workflow
 Enable `--organize-by-subject` to route accepted renames into folders named after their inferred company, project, or person. Before processing begins the CLI scans the destination directory, adds existing folder names to the prompt as hints, and keeps the list in memory to avoid duplicates during the run. Use `--subject-destination` to route the folders (and the generated log) to a different workspace, and add `--move-unknown-subjects` to quarantine low-confidence matches in an `Unknown` folder.

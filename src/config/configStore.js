@@ -24,6 +24,7 @@ const PERSISTED_KEYS = new Set([
   'subjectDestination',
   'moveUnknownSubjects',
   'jsonMode',
+  'visionMode',
   'appendDate',
   'dateFormat',
   'dateValueFormat',
@@ -32,7 +33,12 @@ const PERSISTED_KEYS = new Set([
   'subjectFormat',
   'subjectBriefFormat',
   'documentDescriptionFormat',
-  'segmentSeparator'
+  'segmentSeparator',
+  'pdfPageLimit',
+  'pdfLargeFileThreshold',
+  'pdfLargeFilePageLimit',
+  'pdfVisionPageLimit',
+  'pdfVisionDpi'
 ])
 
 async function loadConfig () {
