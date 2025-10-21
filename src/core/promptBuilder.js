@@ -148,6 +148,21 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
     }
   }
 
+  if (options.appendDate) {
+    const dateCandidates = getDateCandidates(content)
+    segments.push('Append-date mode is enabled. Include the most relevant date in the filename using YYYY-MM-DD format.')
+    if (dateCandidates.length) {
+      segments.push('Available date candidates:')
+      for (const candidate of dateCandidates) {
+        const raw = typeof candidate.rawValue === 'string' ? candidate.rawValue : JSON.stringify(candidate.rawValue)
+        const normalized = candidate.formattedValue ? ` (parsed: ${candidate.formattedValue})` : ''
+        segments.push(`${candidate.source}: ${raw}${normalized}`)
+      }
+    } else {
+      segments.push('No explicit date metadata detected; infer from content if possible.')
+    }
+  }
+
   if (content.text) {
     segments.push('Extracted text snippet:')
     segments.push(content.text)
