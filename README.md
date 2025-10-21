@@ -1,4 +1,4 @@
-# ji-renamer
+# ji-renamer: Jesse's AI Renamer
 
 A Node.js CLI that uses local or hosted multimodal LLMs to inspect a file's contents and generate a descriptive, case-formatted filename. The tool was built for power users who download large research batches—investors, analysts, creative teams—and need a trustworthy assistant to triage, rename, and optionally reorganize assets.
 
