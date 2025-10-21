@@ -192,7 +192,7 @@ Enable `--organize-by-subject` to route accepted renames into folders named afte
 
 Dry-run mode prints the proposed folder moves without touching the filesystem so you can vet the plan before committing. When renames are confirmed, the tool records the chosen subject, destination, and confidence in the run summary for later auditing.
 
-Prompts emphasise clean company names by stripping financing or investor descriptors (e.g. "pitch", "Series A", "seed round"). Add your own red-flag tokens with `--subject-stopwords`, or append bespoke instructions with `--instructions-file` to fine-tune the guidance the LLM receives.
+If you need to avoid specific tokens in inferred subjects, pass them via `--subject-stopwords`, or append bespoke instructions with `--instructions-file` to fine-tune the guidance the LLM receives.
 
 ## Contribution
 Feel free to contribute. Open a new [issue](https://github.com/ozgrozer/ai-renamer/issues) or start a [pull request](https://github.com/ozgrozer/ai-renamer/pulls).
