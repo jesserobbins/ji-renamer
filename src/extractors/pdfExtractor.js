@@ -4,13 +4,15 @@ const path = require('path')
 const { promisify } = require('util')
 const { execFile } = require('child_process')
 const pdfParse = require('pdf-parse')
-const { parsePdfDate } = require('../utils/fileDates')
+const { parsePdfDate, normaliseDateInput } = require('../utils/fileDates')
 
 const execFileAsync = promisify(execFile)
 
 const DEFAULT_OCR_LANGUAGES = ['eng']
 let tesseractWarningIssued = false
 let pdftoppmWarningIssued = false
+let pdftotextWarningIssued = false
+let pdfinfoWarningIssued = false
 const DEFAULT_VISION_DPI = 144
 
 async function cleanupTempDir (dirPath) {
@@ -27,6 +29,107 @@ async function runTesseractOnImage (imagePath, languageArg) {
     maxBuffer: 64 * 1024 * 1024
   })
   return stdout.trim()
+}
+
+async function runPdftotext (filePath, { limit } = {}, logger) {
+  try {
+    const args = ['-q', '-nopgbrk']
+    if (Number.isFinite(limit) && limit > 0) {
+      const boundedLimit = Math.max(1, Math.floor(limit))
+      args.push('-f', '1', '-l', String(boundedLimit))
+    }
+    args.push(filePath, '-')
+
+    const { stdout } = await execFileAsync('pdftotext', args, {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024
+    })
+
+    return stdout.trim()
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      if (!pdftotextWarningIssued && logger) {
+        logger.warn('pdftotext CLI not found. Install Poppler utilities to accelerate large-PDF extraction.')
+        pdftotextWarningIssued = true
+      }
+    } else if (logger) {
+      logger.warn(`pdftotext extraction failed for ${filePath}: ${error.message}`)
+    }
+  }
+
+  return null
+}
+
+async function runPdfinfo (filePath, logger) {
+  try {
+    const { stdout } = await execFileAsync('pdfinfo', ['-isodates', filePath], {
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024
+    })
+
+    return stdout
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      if (!pdfinfoWarningIssued && logger) {
+        logger.warn('pdfinfo CLI not found. Install Poppler utilities to include PDF metadata for large files.')
+        pdfinfoWarningIssued = true
+      }
+    } else if (logger) {
+      logger.warn(`pdfinfo metadata extraction failed for ${filePath}: ${error.message}`)
+    }
+  }
+
+  return null
+}
+
+function parsePdfinfoOutput (output) {
+  if (!output || typeof output !== 'string') {
+    return null
+  }
+
+  const lines = output.split(/\r?\n/)
+  const info = {}
+
+  for (const line of lines) {
+    if (!line.includes(':')) continue
+    const [rawKey, ...rest] = line.split(':')
+    if (!rawKey) continue
+    const key = rawKey.trim()
+    const value = rest.join(':').trim()
+    if (!key) continue
+    info[key] = value
+  }
+
+  return Object.keys(info).length ? info : null
+}
+
+function buildMetadataFromPdfinfo (info) {
+  if (!info || typeof info !== 'object') {
+    return { metadata: null, totalPages: null }
+  }
+
+  const metadata = {}
+
+  if (info.Author) metadata.author = info.Author
+  if (info.Title) metadata.title = info.Title
+  if (info.Subject) metadata.subject = info.Subject
+  if (info.Keywords) metadata.keywords = info.Keywords
+  if (info.Creator) metadata.creator = info.Creator
+  if (info.Producer) metadata.producer = info.Producer
+
+  const creation = parsePdfDate(info.CreationDate) || normaliseDateInput(info.CreationDate)
+  if (creation) metadata.creationDate = creation.toISOString()
+  const modification = parsePdfDate(info.ModDate) || normaliseDateInput(info.ModDate)
+  if (modification) metadata.modificationDate = modification.toISOString()
+
+  const pagesValue = Number.parseInt(info.Pages, 10)
+  const totalPages = Number.isFinite(pagesValue) ? pagesValue : null
+
+  if (!Object.keys(metadata).length) {
+    return { metadata: null, totalPages }
+  }
+
+  return { metadata, totalPages }
 }
 
 async function renderPdfPageImages (filePath, { limit, dpi }, logger) {
@@ -256,13 +359,90 @@ async function extractPdf (filePath, {
     parseOptions.max = appliedPageLimit
   }
 
-  const buffer = await fs.readFile(filePath)
-  const data = await pdfParse(buffer, parseOptions)
+  const DEFAULT_POPPLER_THRESHOLD_BYTES = 20 * 1024 * 1024
+  const popplerThresholdBytes = thresholdBytes || DEFAULT_POPPLER_THRESHOLD_BYTES
+  const shouldAttemptPoppler = appliedPageLimit > 0 || (Number.isFinite(sizeBytes) && sizeBytes >= popplerThresholdBytes)
 
-  let rawText = (data.text || '').trim()
-  const metadata = buildDocumentMetadata(data)
-  if (metadata && typeof metadata === 'object' && Number.isFinite(data.numrender)) {
-    metadata.pagesProcessed = data.numrender
+  let rawText = ''
+  let metadata = null
+  let totalPages = null
+  let processedPages = null
+  let usedPoppler = false
+
+  if (shouldAttemptPoppler) {
+    const popplerText = await runPdftotext(filePath, { limit: appliedPageLimit }, logger)
+    if (popplerText) {
+      rawText = popplerText.trim()
+      processedPages = appliedPageLimit > 0 ? appliedPageLimit : null
+
+      const pdfinfoOutput = await runPdfinfo(filePath, logger)
+      if (pdfinfoOutput) {
+        const parsedInfo = parsePdfinfoOutput(pdfinfoOutput)
+        const { metadata: infoMetadata, totalPages: infoTotalPages } = buildMetadataFromPdfinfo(parsedInfo)
+        if (infoMetadata) {
+          metadata = infoMetadata
+        }
+        if (Number.isFinite(infoTotalPages)) {
+          totalPages = infoTotalPages
+          if (!Number.isFinite(processedPages)) {
+            processedPages = appliedPageLimit > 0
+              ? Math.min(appliedPageLimit, infoTotalPages)
+              : infoTotalPages
+          }
+        }
+      }
+
+      if (Number.isFinite(totalPages) && Number.isFinite(processedPages)) {
+        processedPages = Math.min(processedPages, totalPages)
+      }
+
+      if (metadata && typeof metadata === 'object') {
+        if (Number.isFinite(totalPages) && typeof metadata.pages !== 'number') {
+          metadata.pages = totalPages
+        }
+        if (Number.isFinite(processedPages)) {
+          metadata.pagesProcessed = processedPages
+        }
+      }
+
+      usedPoppler = true
+      if (logger) {
+        if (appliedPageLimit > 0) {
+          const limitDescription = Number.isFinite(processedPages) ? processedPages : appliedPageLimit
+          logger.debug(`Extracted PDF text with pdftotext for first ${limitDescription} page(s).`)
+        } else {
+          logger.debug('Extracted PDF text with pdftotext.')
+        }
+      }
+    } else if (logger) {
+      logger.debug('pdftotext did not yield text; falling back to pdf.js extraction.')
+    }
+  }
+
+  let data = null
+  if (!rawText) {
+    const buffer = await fs.readFile(filePath)
+    data = await pdfParse(buffer, parseOptions)
+    rawText = (data.text || '').trim()
+    metadata = buildDocumentMetadata(data)
+    if (metadata && typeof metadata === 'object' && Number.isFinite(data.numrender)) {
+      metadata.pagesProcessed = data.numrender
+    }
+    if (metadata && typeof metadata === 'object' && Number.isFinite(data.numpages) && typeof metadata.pages !== 'number') {
+      metadata.pages = data.numpages
+    }
+    if (Number.isFinite(data.numpages)) {
+      totalPages = data.numpages
+    }
+    if (Number.isFinite(data.numrender)) {
+      processedPages = data.numrender
+    }
+  } else if (!Number.isFinite(processedPages) && appliedPageLimit > 0) {
+    processedPages = appliedPageLimit
+  }
+
+  if (!metadata || typeof metadata !== 'object') {
+    metadata = {}
   }
 
   let ocr = null
@@ -288,19 +468,20 @@ async function extractPdf (filePath, {
     logger.debug(`Truncated PDF text to ${budget} characters to respect the prompt budget.`)
   }
 
-  const truncatedByPages = Boolean(appliedPageLimit) && data.numpages > data.numrender
+  const truncatedByPages = Boolean(appliedPageLimit) && Number.isFinite(totalPages) && Number.isFinite(processedPages) && totalPages > processedPages
   if (truncatedByPages && logger) {
-    logger.debug(`Processed ${data.numrender} of ${data.numpages} page(s) from the PDF.`)
+    logger.debug(`Processed ${processedPages} of ${totalPages} page(s) from the PDF.`)
   }
 
   const extraction = {
-    totalPages: data.numpages,
-    processedPages: data.numrender,
+    totalPages: Number.isFinite(totalPages) ? totalPages : null,
+    processedPages: Number.isFinite(processedPages) ? processedPages : null,
     pageLimit: appliedPageLimit || null,
     autoLimited,
     truncatedByPageLimit: truncatedByPages,
     truncatedByCharacterLimit: truncatedByCharacters,
-    characterLimit: budget > 0 ? budget : null
+    characterLimit: budget > 0 ? budget : null,
+    extractor: usedPoppler ? 'pdftotext' : 'pdfjs'
   }
 
   let renderedImages = []
@@ -312,8 +493,8 @@ async function extractPdf (filePath, {
     if (appliedPageLimit) {
       visionLimits.push(appliedPageLimit)
     }
-    if (data.numrender && data.numrender > 0) {
-      visionLimits.push(data.numrender)
+    if (Number.isFinite(processedPages) && processedPages > 0) {
+      visionLimits.push(processedPages)
     }
     const positiveLimits = visionLimits.filter((value) => Number.isFinite(value) && value > 0)
     const resolvedVisionLimit = positiveLimits.length ? Math.min(...positiveLimits) : 0
@@ -322,43 +503,46 @@ async function extractPdf (filePath, {
       dpi: visionDpi
     }, logger)
 
+    const resolvedDpi = Number.isFinite(visionDpi) && visionDpi > 0 ? Math.floor(visionDpi) : DEFAULT_VISION_DPI
+
     if (renderedImages.length) {
       extraction.vision = {
         providedImages: renderedImages.length,
         limit: resolvedVisionLimit || null,
-        dpi: Number.isFinite(visionDpi) && visionDpi > 0 ? Math.floor(visionDpi) : DEFAULT_VISION_DPI,
-        truncated: Boolean(resolvedVisionLimit) && data.numpages > resolvedVisionLimit
+        dpi: resolvedDpi,
+        truncated: Boolean(resolvedVisionLimit) && Number.isFinite(totalPages) && totalPages > resolvedVisionLimit
       }
     } else if (logger) {
       logger.warn(`Vision mode enabled but no page renders were generated for ${filePath}.`)
     }
-  }
 
-  if (metadata && typeof metadata === 'object') {
-    if (truncatedByPages) {
-      metadata.truncated = {
-        ...(metadata.truncated || {}),
-        reason: 'page-limit',
-        processedPages: data.numrender,
-        totalPages: data.numpages,
-        autoLimited
-      }
-    }
-    if (truncatedByCharacters) {
-      metadata.characterLimit = budget
-    }
     if (renderedImages.length) {
       metadata.vision = {
         ...(metadata.vision || {}),
         providedImages: renderedImages.length,
-        dpi: Number.isFinite(visionDpi) && visionDpi > 0 ? Math.floor(visionDpi) : DEFAULT_VISION_DPI
+        dpi: resolvedDpi
       }
     }
   }
 
+  if (truncatedByPages) {
+    metadata.truncated = {
+      ...(metadata.truncated || {}),
+      reason: 'page-limit',
+      processedPages: Number.isFinite(processedPages) ? processedPages : null,
+      totalPages: Number.isFinite(totalPages) ? totalPages : null,
+      autoLimited
+    }
+  }
+  if (truncatedByCharacters) {
+    metadata.characterLimit = budget
+  }
+
+  const metadataPayload = Object.keys(metadata).length ? metadata : null
+
   return {
     text,
-    metadata,
+    metadata: metadataPayload,
     ocr,
     extraction,
     images: renderedImages

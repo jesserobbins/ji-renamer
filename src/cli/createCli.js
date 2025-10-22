@@ -115,6 +115,7 @@ const CLI_OPTIONS = {
     type: 'boolean'
   },
   visionMode: {
+    alias: ['vision'],
     cliName: 'vision-mode',
     defaultKey: 'visionMode',
     describe: 'Attach rendered PDF pages/images to prompts so vision-capable models can reason over them',
