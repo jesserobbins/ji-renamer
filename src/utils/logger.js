@@ -2,9 +2,21 @@ const { colorize } = require('./ansi')
 
 const levels = ['debug', 'info', 'warn', 'error']
 
+const defaultLevelStyles = {
+  debug: ['cyan'],
+  info: ['green'],
+  warn: ['yellow'],
+  error: ['red', 'bold']
+}
+
 function buildLogger (options) {
   const safeOptions = options || {}
   const levelFromEnv = safeOptions.level || process.env.AI_RENAMER_LOG_LEVEL || 'info'
+
+  const levelStyles = {
+    ...defaultLevelStyles,
+    ...(safeOptions.levelStyles || {})
+  }
 
   let threshold = levels.indexOf(levelFromEnv)
   if (threshold === -1) {
