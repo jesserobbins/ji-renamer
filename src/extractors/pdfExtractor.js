@@ -361,7 +361,7 @@ async function extractPdf (filePath, {
 
   const DEFAULT_POPPLER_THRESHOLD_BYTES = 20 * 1024 * 1024
   const popplerThresholdBytes = thresholdBytes || DEFAULT_POPPLER_THRESHOLD_BYTES
-  const shouldAttemptPoppler = appliedPageLimit > 0 && Number.isFinite(sizeBytes) && sizeBytes >= popplerThresholdBytes
+  const shouldAttemptPoppler = appliedPageLimit > 0 || (Number.isFinite(sizeBytes) && sizeBytes >= popplerThresholdBytes)
 
   let rawText = ''
   let metadata = null
@@ -373,7 +373,7 @@ async function extractPdf (filePath, {
     const popplerText = await runPdftotext(filePath, { limit: appliedPageLimit }, logger)
     if (popplerText) {
       rawText = popplerText.trim()
-      processedPages = appliedPageLimit || null
+      processedPages = appliedPageLimit > 0 ? appliedPageLimit : null
 
       const pdfinfoOutput = await runPdfinfo(filePath, logger)
       if (pdfinfoOutput) {
@@ -384,6 +384,11 @@ async function extractPdf (filePath, {
         }
         if (Number.isFinite(infoTotalPages)) {
           totalPages = infoTotalPages
+          if (!Number.isFinite(processedPages)) {
+            processedPages = appliedPageLimit > 0
+              ? Math.min(appliedPageLimit, infoTotalPages)
+              : infoTotalPages
+          }
         }
       }
 
@@ -402,8 +407,12 @@ async function extractPdf (filePath, {
 
       usedPoppler = true
       if (logger) {
-        const limitDescription = Number.isFinite(processedPages) ? processedPages : appliedPageLimit
-        logger.debug(`Extracted PDF text with pdftotext for first ${limitDescription} page(s).`)
+        if (appliedPageLimit > 0) {
+          const limitDescription = Number.isFinite(processedPages) ? processedPages : appliedPageLimit
+          logger.debug(`Extracted PDF text with pdftotext for first ${limitDescription} page(s).`)
+        } else {
+          logger.debug('Extracted PDF text with pdftotext.')
+        }
       }
     } else if (logger) {
       logger.debug('pdftotext did not yield text; falling back to pdf.js extraction.')

@@ -74,7 +74,7 @@ ji-renamer ~/Downloads/Pitches \
 ```
 
 ### Vision mode for decks and scans
-Enable `--vision-mode` when working with heavy visual documents (pitch decks, scanned agreements, forms). The CLI will rasterise
+Enable `--vision-mode` (or the shorthand `--vision`) when working with heavy visual documents (pitch decks, scanned agreements, forms). The CLI will rasterise
 the first pages to JPEG, attach the images to the prompt, and still include extracted text/OCR for models that can read both. Combine
 this flag with:
 
@@ -158,7 +158,7 @@ Options:
       --summary                 Print a summary report after the run     [boolean]
       --verbose                Enable verbose logging with step-by-step timings
                                                                        [boolean]
-      --vision-mode            Attach rendered PDF pages/images so vision models
+      --vision-mode, --vision  Attach rendered PDF pages/images so vision models
                                 can analyse them                         [boolean]
       --append-date             Ask the model to select the most relevant
                                 metadata/creation date and report it in the
