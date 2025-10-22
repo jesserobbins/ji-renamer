@@ -1,3 +1,5 @@
+const { colorize } = require('./ansi')
+
 const levels = ['debug', 'info', 'warn', 'error']
 
 function buildLogger (options) {
@@ -21,7 +23,8 @@ function buildLogger (options) {
   const log = (level, message, ...rest) => {
     const levelIndex = levels.indexOf(level)
     if (levelIndex === -1 || levelIndex < threshold) return
-    const prefix = `[${new Date().toISOString()}] ${level.toUpperCase()}:`
+    const styledLevel = levelStyles[level] ? colorize(level.toUpperCase(), levelStyles[level]) : level.toUpperCase()
+    const prefix = `[${new Date().toISOString()}] ${styledLevel}:`
     // eslint-disable-next-line no-console
     console[level === 'debug' ? 'log' : level](prefix, message, ...rest)
   }
