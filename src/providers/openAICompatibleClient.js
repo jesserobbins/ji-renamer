@@ -22,15 +22,65 @@ function createOpenAICompatibleClient (options, logger) {
 
   function buildBody (prompt, responseFormatType) {
     const userContent = [{ type: 'text', text: prompt.userMessage }]
-    const images = prompt.images || []
-    const frames = prompt.frames || []
 
+    const normalizeImage = (image, fallbackMediaType) => {
+      if (!image) {
+        return null
+      }
+
+      if (image.type === 'image_url' && image.image_url?.url) {
+        const payload = { url: image.image_url.url }
+        const detail = image.image_url.detail || image.detail
+        if (detail) {
+          payload.detail = detail
+        }
+        return {
+          type: 'image_url',
+          image_url: payload
+        }
+      }
+
+      if (typeof image.url === 'string' && image.url) {
+        const payload = { url: image.url }
+        if (image.detail) {
+          payload.detail = image.detail
+        }
+        return { type: 'image_url', image_url: payload }
+      }
+
+      const mediaType = image.mediaType || fallbackMediaType || 'image/png'
+      if (typeof image.base64 === 'string' && image.base64) {
+        const payload = {
+          url: `data:${mediaType};base64,${image.base64}`
+        }
+        if (image.detail) {
+          payload.detail = image.detail
+        }
+        return { type: 'image_url', image_url: payload }
+      }
+
+      return null
+    }
+
+    const images = Array.isArray(prompt.images) ? prompt.images : []
     images.forEach(image => {
-      userContent.push({ type: 'image', image_base64: image.base64, media_type: image.mediaType })
+      const normalized = normalizeImage(image)
+      if (normalized) {
+        userContent.push(normalized)
+      }
     })
 
+    const frames = Array.isArray(prompt.frames) ? prompt.frames : []
     frames.forEach(frame => {
-      userContent.push({ type: 'image', image_base64: frame, media_type: 'image/jpeg' })
+      const normalized = normalizeImage(
+        typeof frame === 'string'
+          ? { base64: frame, mediaType: 'image/jpeg' }
+          : frame,
+        'image/jpeg'
+      )
+      if (normalized) {
+        userContent.push(normalized)
+      }
     })
 
     const body = {

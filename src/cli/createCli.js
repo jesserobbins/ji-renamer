@@ -17,7 +17,9 @@ const defaultOptions = {
   subjectStopwords: '',
   dryRun: false,
   summary: false,
+  verbose: false,
   jsonMode: true,
+  visionMode: false,
   maxFileSize: 0,
   onlyExtensions: '',
   ignoreExtensions: '',
@@ -32,7 +34,12 @@ const defaultOptions = {
   subjectFormat: '',
   subjectBriefFormat: '',
   documentDescriptionFormat: '',
-  segmentSeparator: '-'
+  segmentSeparator: '-',
+  pdfPageLimit: 0,
+  pdfLargeFileThreshold: 25,
+  pdfLargeFilePageLimit: 30,
+  pdfVisionPageLimit: 12,
+  pdfVisionDpi: 144
 }
 
 const CLI_OPTIONS = {
@@ -100,6 +107,17 @@ const CLI_OPTIONS = {
   },
   summary: {
     describe: 'Print a summary report after processing',
+    type: 'boolean'
+  },
+  verbose: {
+    alias: 'V',
+    describe: 'Enable verbose logging with step-by-step timings',
+    type: 'boolean'
+  },
+  visionMode: {
+    cliName: 'vision-mode',
+    defaultKey: 'visionMode',
+    describe: 'Attach rendered PDF pages/images to prompts so vision-capable models can reason over them',
     type: 'boolean'
   },
   maxFileSize: {
@@ -179,6 +197,36 @@ const CLI_OPTIONS = {
     defaultKey: 'segmentSeparator',
     describe: 'Separator used between formatted filename segments (subject, descriptors, title, date)',
     type: 'string'
+  },
+  pdfPageLimit: {
+    cliName: 'pdf-page-limit',
+    defaultKey: 'pdfPageLimit',
+    describe: 'Limit PDF text extraction to the first N pages (0 processes all pages)',
+    type: 'number'
+  },
+  pdfLargeFileThreshold: {
+    cliName: 'pdf-large-file-threshold',
+    defaultKey: 'pdfLargeFileThreshold',
+    describe: 'Automatically limit PDF extraction when files exceed this size in MB (0 disables auto-limiting)',
+    type: 'number'
+  },
+  pdfLargeFilePageLimit: {
+    cliName: 'pdf-large-file-page-limit',
+    defaultKey: 'pdfLargeFilePageLimit',
+    describe: 'Number of pages to process when auto-limiting large PDFs is triggered',
+    type: 'number'
+  },
+  pdfVisionPageLimit: {
+    cliName: 'pdf-vision-page-limit',
+    defaultKey: 'pdfVisionPageLimit',
+    describe: 'Maximum number of PDF pages to rasterise into images when vision mode is enabled (0 renders every page)',
+    type: 'number'
+  },
+  pdfVisionDpi: {
+    cliName: 'pdf-vision-dpi',
+    defaultKey: 'pdfVisionDpi',
+    describe: 'Resolution in DPI used when rendering PDF pages for vision mode',
+    type: 'number'
   },
   jsonMode: {
     cliName: 'json-mode',

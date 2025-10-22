@@ -159,7 +159,16 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
     segments.push(content.text)
   }
 
-  if (content.image) {
+  const visionAttachments = Array.isArray(content.images) ? content.images : []
+
+  if (visionAttachments.length) {
+    const pageHints = visionAttachments
+      .map((image) => image && Number.isFinite(image.pageNumber) ? image.pageNumber : null)
+      .filter((value, index, self) => value !== null && self.indexOf(value) === index)
+      .sort((a, b) => a - b)
+    const pageSummary = pageHints.length ? ` (pages: ${pageHints.join(', ')})` : ''
+    segments.push(`Vision attachments: ${visionAttachments.length} image(s) included${pageSummary}.`)
+  } else if (content.image) {
     const preview = content.image.base64.slice(0, 4000)
     segments.push('Image preview (base64, truncated):')
     segments.push(preview)
@@ -202,7 +211,7 @@ function buildPrompt ({ content, options, subjectHints, instructionSet, dateCand
   return {
     systemMessage,
     userMessage,
-    images: content.image ? [content.image] : [],
+    images: visionAttachments.length ? visionAttachments : (content.image ? [content.image] : []),
     frames: content.frames || []
   }
 }
